@@ -1,0 +1,44 @@
+---
+title: "Machine Learning and Predictive Modelling 1"
+author: "Leo, Lars, Niolas, Dominik"
+date: "10/14/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+#Install Packages
+#install.packages("gitcreds")
+
+#Load Packages
+library(gitcreds)
+
+
+```
+
+## Data Perparation
+
+```{r load}
+df <- read.csv2("./data/autos.csv",sep = ",")
+```
+
+```{r cleaning}
+####
+```
+
+
+## Spielwiesen
+
+### Dominik
+
+```{r cleaning}
+head(df)
+```
+
+
+### Nico
+
+### Lars
+
+### Leo
