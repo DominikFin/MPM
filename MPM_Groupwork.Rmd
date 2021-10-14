@@ -25,6 +25,7 @@ When you click the **Knit** button a document will be generated that includes bo
 
 ```{r cars}
 summary(cars)
+head(cars)
 ```
 
 ## Including Plots
@@ -38,5 +39,5 @@ plot(pressure)
 Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
 
 ```{r}
-
+#Dominiks kommentar
 ```
