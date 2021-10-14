@@ -27,7 +27,7 @@ Hier eine Änderung von Leo
 
 ```{r cars}
 summary(cars)
-heattttd(pressure) #hello
+tail(cars)
 ```
 
 ## Including Plots
