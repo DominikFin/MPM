@@ -9,9 +9,10 @@ output: html_document
 knitr::opts_chunk$set(echo = TRUE)
 
 #Install Packages
-
+#install.packages("gitcreds")
 
 #Load Packages
+library(gitcreds)
 
 
 ```
@@ -30,6 +31,10 @@ df <- read.csv2("./data/autos.csv",sep = ",")
 ## Spielwiesen
 
 ### Dominik
+
+```{r cleaning}
+```
+
 
 ### Nico
 
