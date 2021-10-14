@@ -27,6 +27,7 @@ Hier eine Änderung von Leo
 
 ```{r cars}
 summary(cars)
+head(cars)
 ```
 
 ## Including Plots
@@ -41,7 +42,7 @@ summary(pressure)
 Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
 
 ```{r}
-
+#Dominiks kommentar
 ```
 
 
