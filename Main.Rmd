@@ -21,6 +21,7 @@ library(gitcreds)
 
 ```{r load}
 df <- read.csv2("./data/autos.csv",sep = ",")
+head(df)
 ```
 
 ```{r cleaning}
