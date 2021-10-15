@@ -1,5 +1,5 @@
 ---
-title: "Machine Learning and Predictive Modelling 1"
+title: "Maachine Learning and Predictive Modelling 1"
 author: "Leo, Lars, Niolas, Dominik"
 date: "10/14/2021"
 output: html_document
