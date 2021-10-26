@@ -11,10 +11,12 @@ knitr::opts_chunk$set(echo = TRUE)
 #Install Packages
 #install.packages("gitcreds")
 #install.packages("tidyverse")
+#install.packages("ggplot2")
 
 #Load Packages
 library(gitcreds)
 library(tidyverse)
+library(ggplot2)
 
 #gitcreds_set() #Only needed in the first setup when git sync is not working with password only
 ```
@@ -34,8 +36,8 @@ df <- dplyr::filter(df, seller == "privat") #only include privat sellers
 df <- dplyr::filter(df, offerType == "Angebot") #only keep offerings "Angebote"
 
 # Price
-df <- dplyr::filter(df, price > 100) #only keep offerings with a min. price of 100 euro
-df <- dplyr::filter(df, price < 150000) #only keep offerings with a max price of 150k
+df <- dplyr::filter(df, price >= 100) #only keep offerings with a min. price of 100 euro
+df <- dplyr::filter(df, price <= 150000) #only keep offerings with a max price of 150k
 
 # Price
 df <- dplyr::filter(df, vehicleType != "andere") #only keep offerings with a specific type
@@ -48,16 +50,16 @@ df <- dplyr::filter(df, yearOfRegistration > 1959) #only keep offerings registra
 df <- df %>% filter(!is.na(gearbox)) #filter NAs in gearbox
 
 # PowerPS
-df <- dplyr::filter(df, powerPS > 10) #only keep offerings with a min. PS of 10
-df <- dplyr::filter(df, powerPS < 1000) #only keep offerings with a max PS of 1000
+df <- dplyr::filter(df, powerPS >= 10) #only keep offerings with a min. PS of 10
+df <- dplyr::filter(df, powerPS <= 1000) #only keep offerings with a max PS of 1000
 
 # Model
 df <- dplyr::filter(df, model != "andere") #only keep offerings with a specific model
 df <- df %>% filter(!is.na(model)) #only want offerings with a model
 
 # Kilometer
-df <- dplyr::filter(df, kilometer > 10000) #only keep offerings with a min. 10k kilommeter (only want used cars)
-df <- dplyr::filter(df, kilometer < 500000) #only keep offerings with a max 500k kilometer
+df <- dplyr::filter(df, kilometer >= 10000) #only keep offerings with a min. 10k kilommeter (only want used cars)
+df <- dplyr::filter(df, kilometer <= 500000) #only keep offerings with a max 500k kilometer
 
 # FuelType
 df <- dplyr::filter(df, fuelType != "andere") #only keep offerings with a specific fuel type
@@ -82,7 +84,8 @@ df$abtest <- NULL
 ## Spielwiesen
 
 ### Dominik
-
+```{r cleaning}
+```
 
 ### Nico
 
