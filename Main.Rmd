@@ -15,6 +15,8 @@ knitr::opts_chunk$set(echo = TRUE)
 #Load Packages
 library(gitcreds)
 library(tidyverse)
+
+#gitcreds_set() #Only needed in the first setup when git sync is not working with password only
 ```
 
 ## Data Perparation
@@ -25,20 +27,61 @@ df <-read_csv("./data/autos.csv")
 ```
 
 ```{r cleaning}
-####
+# Seller
+df <- dplyr::filter(df, seller == "privat") #only include privat sellers
+
+# offertype
+df <- dplyr::filter(df, offerType == "Angebot") #only keep offerings "Angebote"
+
+# Price
+df <- dplyr::filter(df, price > 100) #only keep offerings with a min. price of 100 euro
+df <- dplyr::filter(df, price < 150000) #only keep offerings with a max price of 150k
+
+# Price
+df <- dplyr::filter(df, vehicleType != "andere") #only keep offerings with a specific type
+df <- df %>% filter(!is.na(vehicleType)) #filter NAs in vehicleType
+
+# Registration
+df <- dplyr::filter(df, yearOfRegistration > 1959) #only keep offerings registrated after 1959
+
+# Gearbox
+df <- df %>% filter(!is.na(gearbox)) #filter NAs in gearbox
+
+# PowerPS
+df <- dplyr::filter(df, powerPS > 10) #only keep offerings with a min. PS of 10
+df <- dplyr::filter(df, powerPS < 1000) #only keep offerings with a max PS of 1000
+
+# Model
+df <- dplyr::filter(df, model != "andere") #only keep offerings with a specific model
+df <- df %>% filter(!is.na(model)) #only want offerings with a model
+
+# Kilometer
+df <- dplyr::filter(df, kilometer > 10000) #only keep offerings with a min. 10k kilommeter (only want used cars)
+df <- dplyr::filter(df, kilometer < 500000) #only keep offerings with a max 500k kilometer
+
+# FuelType
+df <- dplyr::filter(df, fuelType != "andere") #only keep offerings with a specific fuel type
+df <- df %>% filter(!is.na(fuelType)) #filter NAs in gearbox
+
+# Brand
+df <- dplyr::filter(df, brand != "andere") #only keep offerings with a specific brand
+df <- df %>% filter(!is.na(brand))
+
+# Damage
+df <- df %>% filter(!is.na(notRepairedDamage))
+
+
+# drop not needed columns
+df$seller <- NULL
+df$offerType <- NULL
+df$abtest <- NULL
+
 ```
 
 
 ## Spielwiesen
 
 ### Dominik
-
-```{r cleaning}
-df <- dplyr::filter(df, seller == "privat") #only include privat sellers
-df <- df %>% filter(!is.na(brand))
-df <- df %>% filter(!is.na(model))
-
-```
 
 
 ### Nico
