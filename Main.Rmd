@@ -10,18 +10,18 @@ knitr::opts_chunk$set(echo = TRUE)
 
 #Install Packages
 #install.packages("gitcreds")
+#install.packages("tidyverse")
 
 #Load Packages
 library(gitcreds)
-
-## hallo
+library(tidyverse)
 ```
 
 ## Data Perparation
 
 ```{r load}
-df <- read.csv2("./data/autos.csv",sep = ",")
-head(df)
+#df <- read.csv2("./data/autos.csv")
+df <-read_csv("./data/autos.csv")
 ```
 
 ```{r cleaning}
@@ -34,7 +34,10 @@ head(df)
 ### Dominik
 
 ```{r cleaning}
-head(df)
+df <- dplyr::filter(df, seller == "privat") #only include privat sellers
+df <- df %>% filter(!is.na(brand))
+df <- df %>% filter(!is.na(model))
+
 ```
 
 
