@@ -85,8 +85,11 @@ df$abtest <- NULL
 
 ### Dominik
 ```{r cleaning}
+auswahl_brand <- filter(df, brand == "fiat")
+ggplot(auswahl_brand, aes(x=kilometer,y=price,color=model)) +
+  geom_point(position = "jitter",alpha=0.5)+
+  geom_smooth(method="glm")
 ```
-
 ### Nico
 
 ### Lars
