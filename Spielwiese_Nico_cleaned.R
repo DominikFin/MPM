@@ -5,7 +5,8 @@ packages <- c("gitcreds",
               "ggplot2",
               "readxl",
               "zoo",
-              "car")
+              "car",
+              "mgcv")
 installed_packages <- packages %in% rownames(installed.packages())
 if (any(installed_packages == FALSE)) {
   install.packages(packages[!installed_packages])
@@ -17,6 +18,7 @@ library(ggplot2)
 library(readxl)
 library(zoo)
 library(car)
+library(mgcv)
 
 
 # ??Git_command?? ---------------------------------------------------------
@@ -60,7 +62,9 @@ df <- df %>%
            !is.na(yearOfRegistration) & 
            !is.na(age) &
            age >= 180 &
-           age <= 10000) %>%
+           age <= 10000 &
+           model != "andere" &
+           lastSeen <= as.POSIXct("2016-04-04 23:59:59")) %>%
   select(-c("seller",
             "offerType",
             "abtest",
@@ -71,13 +75,13 @@ df <- df %>%
 
 brand_table <- df %>%
   count(brand) %>%
-  filter(n >= 4000)
+  filter(n >= 1000)
 
 brand_vector <- as.character(brand_table$brand)
 
 model_table <- df %>%
   count(model) %>%
-  filter(n >= 4000)
+  filter(n >= 0)
 
 model_vector <- as.character(model_table$model)
 
@@ -85,8 +89,7 @@ model_vector <- as.character(model_table$model)
 
 df <- df %>% 
   filter(brand %in% brand_vector &
-           model %in% model_vector &
-           model != "andere")
+           model %in% model_vector)
 
 # Change data types
 
@@ -97,44 +100,53 @@ df <- df %>%
 
 # Investigate variables ---------------------------------------------------
 
+# As mentioned earlier, the following functions were used to get a better understanding
+# of each variable and to filter them accordingly. The histogram provides information
+# on the distribution of the data points within a variable. The quantile and ecdf function
+# were used to try out different values and to spot anomalies and mistakes in the data set.
+# They were also used to come up with the final ranges. 
+# TO DO: Is there a systematic process how to filter and decide ranges?
+
 # price
 
 summary(df$price)
 hist(df$price, xlab = "price", main = "Histogram response variable price")
 quantile(df$price, 0.95)
+ecdf(df$price)(17000)
 
 # Our response variable is extremely right-skewed as the histogram shows. Prices
-# range from 500 to 40'000. 95% of all observations show a price which is 20'000
+# range from 500 to 40'000. 95% of all observations show a price which is 17'000
 # or less. As our response variable is considered as amount, we will log-transform
-# it in the modelling part. This helps also to reduce right-skewness.
+# it in the modelling part. This helps also to reduce right-skewedness.
 
 # age
 
 summary(df$age)
 hist(df$age, xlab = "age in days", main = "Histogram age of cars")
+quantile(df$age, 0.50)
+ecdf(df$age)(4374)
 
-# Half of the cars offered are older than 4513 / 365 = 12 years. The data seems to approximately
+# Half of the cars offered are older than 4374 / 365 ~ 12 years. The data seems to approximately
 # follow a normal distribution.
 
 # powerPS
 
 summary(df$powerPS)
 hist(df$powerPS, xlab = "PS", main = "Histogram PS of cars")
+quantile(df$powerPS, 0.75)
 ecdf(df$powerPS)(120) - ecdf(df$powerPS)(100)
 
-# The distribution of the PS values is also right-skewed. 20 % of all observations show values 
+# The distribution of the PS values is also right-skewed. About 20 % of all observations show values 
 # between 100 and 120 PS. Prices fitted from PS values should better fit in this range.
 
 # kilometer
 
 summary(df$kilometer)
 barplot(table(df$kilometer), xlab = "number of kilometers", main = "Mileage of cars")
-df %>%
-  count(kilometer)
 
 # The mileage variable form the data set is most likely a categorical variable where the 
 # advertiser could set a predefined value. The distribution is extremely left-skewed.
-# The share of cars with 125'000 or more kilometers is around 80%.
+# The share of cars with 125'000 or more kilometers is around 75%.
 
 # vehicleType
 
@@ -153,15 +165,20 @@ barplot(table(df$gearbox))
 # brand & model
 
 summary(df$brand)
+nlevels(df$brand)
 summary(df$model)
+nlevels(df$model)
+
+barplot(table(df$brand))
+
 ggplot(data=df, aes(x=brand, fill = model)) +
   geom_bar(stat = "count") +
-  scale_fill_brewer(palette = "Set3") + 
+  #scale_fill_brewer(palette = "Set3") + 
   ggtitle("Brands and models") +
   theme(axis.text.x = element_text(size = 12)) +
   theme(axis.text.y = element_text(size = 12))
   
-# Volkswagen is the dominant car brand with more than 30'000 cars advertised.
+# Volkswagen is the dominant car brand with more than 20'000 cars advertised.
 # The VW Golf is the dominant model advertised, followed by the BMW 3er.
 
 # fuelType
@@ -170,7 +187,7 @@ summary(df$fuelType)
 barplot(table(df$fuelType), main = "Fuel type of cars")
 range(df$yearOfRegistration)
 
-# We focus on "Benzin" and "Diesel". There are no electric vehicles advertised in the data set
+# We focus on "Benzin" and "Diesel". There were no electric vehicles advertised in the data set
 # which is not much of a surprise as the car registration values for the advertised cars
 # range from 1988 to 2015.
 
@@ -179,7 +196,7 @@ range(df$yearOfRegistration)
 summary(df$notRepairedDamage)
 barplot(table(df$notRepairedDamage), main = "Repaired damage")
 
-# 8% of the advertised cars had a damage and were repaired whereas 82% had no damage.
+# Around 10% of the advertised cars had a damage and were repaired before advertised.
 
 
 # Graphical analysis ------------------------------------------------------
@@ -209,11 +226,18 @@ template.scatterplot.df + aes(x = powerPS)
 
 # There is a clear positive effect of PS on price. whether the relationship is best modeled by
 # a linear or higher order term needs to be evaluated. There is some bumpiness from around
-# 220 PS on. Is this random noised due to decreasing observations or does that to be modeled?
+# 220 PS on. Is this random noise due to decreasing observations or does that to be modeled?
 
 # kilometer as continuous variable
 
 template.scatterplot.df + aes(x = as.numeric(kilometer))
+
+# The mileage of the cars does have a negative effect on the price which is logical from a business
+# point of view. It looks mostly like a linear relationship except for the low and high segments of
+# the mileage. But be careful, the last two mileage levels show a distance of 25'000 kilometers in
+# between. Not visible here are advertised cars with a mileage of 5000km. In the range of 5000
+# to 10000 kilometers the observations actually showed a positive on the price variable which is
+# difficult to understand.
 
 # Analysis of categorical variables:
 
@@ -233,11 +257,12 @@ template.boxplot.df + aes(x = kilometer)
 
 template.boxplot.df + aes(x = vehicleType)
 
-# There are some differences in prices for the different vehicle types. Buses are the most
+# There are some differences in prices for the different vehicle types. SUV's are the most
 # expensive cars whereas kleinwagen seem to be lowest in price. This is not a surprise.
-# The variability for cabrio, coupe, kleinwagen, kombi and limousine is larger then for
-# bus and suv. If all the different vehicle types have a significant influence on price
-# will be checked in the modelling part.
+# The variability for coupe is larger than for cabrio, kleinwagen, kombi, limousine and bus.
+# The variability for suv semms to be the smallest with some outliers in the low price segment.
+# If all the different vehicle types have a significant influence on price will be checked in
+# the modelling part.
 
 template.boxplot.df + aes(x = gearbox)
 
@@ -256,8 +281,8 @@ template.boxplot.df + aes(x = notRepairedDamage)
 
 template.boxplot.df + aes(x = brand)
 
-# Cars form the brand Audi will be advertised the most expensive whereas Opel cars will be
-# advertised with lower prices. Variability looks pretty constant over all brands.
+# Cars form the brand mini show the highest median price whereas Renault cars show the lowest.
+# The brands do show different variability in price. 
 
 template.boxplot.df + aes(x = model)
 
@@ -310,10 +335,12 @@ boxplot.vw
 # Polo cheaper than Passat and Golf.
 
 # Do we have other variables to control for where an effect is different among the levels of
-# another factor? Or in other words, is there any interaction? For example is the kilometer
-# depreciation in price different among the brands. Is the age depreciation in price
-# different among the brands? Or is the depreciation in price from kilometers and age different
-# among the vehicle types? We will test that in the modelling part.
+# another factor? Or in other words, is there any interaction between the predictor variables?
+# For example is the kilometer depreciation in price different among the brands?
+# Is the age depreciation in price different among the brands?
+# Or is the depreciation in price from kilometers and age different among the vehicle types?
+# We will focus for now on the graphical analysis and test these hypotheses later in the
+# modelling part.
 
 ggplot(data = df,
        mapping = aes(y = log(price), x = age)) +
@@ -321,9 +348,9 @@ ggplot(data = df,
   geom_smooth() +
   facet_wrap(. ~ brand)
 
-# We can see that the price depreciation from age behaves similarly for the different brands.
-# For the brands audi an opel we do not have many data points for an age above 7500 days.
-# Especially for the audi brand this abrupt missing of values is surprising.
+# We can see that the price depreciation from age behaves similarly among the different brands.
+# From a certain age on the we can observe a positive effect on price. For some brands we do 
+# do not have many data points for older vehicles.
 
 ggplot(data = df,
        mapping = aes(y = log(price), x = as.numeric(kilometer))) +
@@ -331,12 +358,12 @@ ggplot(data = df,
   geom_smooth() +
   facet_wrap(. ~ brand)
 
-# We changed the kilometer variable to numeric in order to plot some smoothers to compare the
+# We changed the kilometer variable to numeric in order to plot a smoother to compare the
 # different brands. Again, the behavior looks similar. BMW cars tend to have higher depreciation
 # in the beginning and the end. For kilometers between 20 and 40k BMW's tend to raise in value.
 # This is really interesting. The same behavior can be observed for the brands Mercedes-Benz
 # and Opel, which have periods where the effect of depreciation is not linearly negative until
-# about 50'000 km driven.
+# about 50'000 km driven. There are brands were we do not have many data points for a short mileage.
 
 ggplot(data = df,
        mapping = aes(y = log(price), x = age)) +
@@ -344,12 +371,12 @@ ggplot(data = df,
   geom_smooth() +
   facet_wrap(. ~ vehicleType)
 
-# Again the curves look similar in terms of age depreciation among the different vehicle types 
-# except for buses and suv's. There is an abrupt change in observations for buses older than
-# 4000 days. For the vehicle type suv's it becomes clear that there are simply too less
-# observations. SUV's became popular only recently. For cabrios the turning point is around
-# 7000 days. From there on, cabrios gain in value faster than other vehicle types. This may be
-# due to the attraction of vintage cabrios.
+# Again the curves look similar in terms of age depreciation among the different vehicle types. 
+# There is a change of the effect on price from negative to positive from a certain age on. 
+# For the vehicle type suv's there are not many observations for an age older than 5000 days.
+# This could indicate that SUV's became popular only recently. For cabrios the turning point is
+# around 7000 days. From there on, cabrios gain in value faster than other vehicle types. This
+# may be due to the attraction of vintage cabrios.
 
 ggplot(data = df,
        mapping = aes(y = log(price), x = as.numeric(kilometer))) +
@@ -357,13 +384,9 @@ ggplot(data = df,
   geom_smooth() +
   facet_wrap(. ~ vehicleType)
 
-# The graphics looks similar except for coupes. Coupes are gaining in value until about
-# 50'000 kilometers driven. This seems counter-intuitive and may be due to the fact that
-# there are not many data points until then. Also the graph for suv's is useless respectively
-# not even produced. Therefore we strap the suv's from our dataset.
-
-df <- df %>% 
-  filter(vehicleType != "suv")
+# The graphics look similar except for coupes and kombis. Coupes are gaining in value until about
+# 50'000 kilometers driven. This seems counter-intuitive and may be due to the fact that there are
+# not many data points until then.
 
 
 # Fitting a linear model ----------------------------------------------------------
@@ -381,132 +404,206 @@ summary(lm.autos_1)
 
 alias(lm.autos_1)
 
-# Let's take the example of the model Polo. Indeed, it is logical that whenever the brand is
-# Volkswagen and the model is not Golf or Passat it must be a VW Polo. How could we solve
-# that issue? Create one variable out of model and brand?
+# Let's take the example of the model Citroen c5. Indeed, it makes sense that whenever the brand is
+# Citroen and the model is not berlingo, c1, c2, c3 or c4 it must be a c5. So including the brand and
+# the model as two separate variables makes no sense as the brand is already defined through the model.
+# We can simply solve that issue by only including the model type.
 
-df["brandModel"] = paste(df$brand,df$model,sep = "_")
-
-# Fit model again with new predictor brandModel
-
-lm.autos_2 <- lm(log(price) ~ age + powerPS + kilometer + gearbox + brandModel + fuelType +
+lm.autos_2 <- lm(log(price) ~ age + powerPS + kilometer + gearbox + model + fuelType +
                    notRepairedDamage + vehicleType,
                  data = df)
 summary(lm.autos_2)
 
-# If we compare the summary statistics of lm.autos_1 with lm.autos_2 we state that the model got
-# simpler as there are less variables but the variability explained remains unchanged.
 
-# Do we lose some variability if we only focus on brands instead of brands and models?
-# Let's check it once only including the brands and once only including the models.
+# If we compare the summary statistics of lm.autos_1 with lm.autos_2 we state that the model got
+# simpler as there are less variables but the variability explained remains unchanged. We now check
+# our model for collinearity.
+
+vif(lm.autos_2)
+
+# We can see that the GVIF value for the variable "model" is way too large. This indicates that the model
+# variable is correlated to a linear combination of other variables. In our case, that could mean that the
+# "model" is highly correlated with other variables just as powerPS, gearbox, vehicleType and so on.
+# We therefore exclude the "model" variable and replace it with "brand".
 
 lm.autos_3 <- lm(log(price) ~ age + powerPS + kilometer + gearbox + brand + fuelType +
                    notRepairedDamage + vehicleType,
                  data = df)
 summary(lm.autos_3)
 
-# Only a tiny little bit not including the models.
-
-lm.autos_4 <- lm(log(price) ~ age + powerPS + kilometer + gearbox + model + fuelType +
-                   notRepairedDamage + vehicleType,
-                 data = df)
-summary(lm.autos_4)
-
-# Of course this is the same again with the variable brandmodel as there is actually no difference
-# between the two as models specify the brands more precisely.
-
-# We now check our model with the "brandModel" predictor in terms of collinearity again
-
-vif(lm.autos_2)
-
-# As we can see there are some GVIFs values above 10 so we have some collinearity issues. We check
-# lm.model_3 only including the "brand" predictor as well for collinearity.
+# Our model does now have fewer parameters to fit and therefore became simpler. We lost some of the explained
+# variability which is logical as we have less parameters. We check again for collinearity.
 
 vif(lm.autos_3)
 
-# Here the GVIFs values are just fine so that we decide to strap the models form our model. 
-
-# We test as well if all predictors do have a significant effect on the response variable with
-# the drop1 command:
+# Now there seems to no problem anymore. From here on We test if all predictors do have a significant effect
+# on the response variable with the drop1 command:
 
 drop1(lm.autos_3, test = "F")
 
-# We can clearly state that all predictors do have a strong effect on the response variable.
+# We can clearly state that all predictors do have a strong effect on the response variable. We now include
+# the relevant two-fold interactions as figured out in the graphical analysis.
 
-# We now include all the two-fold interactions between the variables.
+lm.autos_4 <- lm(log(price) ~ age + powerPS + kilometer + gearbox + brand + fuelType + 
+                   notRepairedDamage + vehicleType + age:brand + age:vehicleType +
+                   kilometer:brand + kilometer:vehicleType, data = df)
+summary(lm.autos_4)
+alias(lm.autos_4)
 
-lm.autos_5 <- lm(log(price) ~ (age + powerPS + kilometer + gearbox + brand + fuelType +
-                                 notRepairedDamage + vehicleType)^2,
-                 data = df)
-summary(lm.autos_5)
 
-alias(lm.autos_5)
+# Including the relevant two-fold-interactions, the variability explained increases slightly. Again we check if all
+# predictors including the two-fold-interactions have a significant effect on the response variable.
 
-# Including all two-fold-interactions, the variability explained only changes slightly. Again
-# we check if all predictors including the two-fold-interactions between them have a significant
-# effect on the response variable.
+drop1(lm.autos_4, test = "F")
 
-drop1(lm.autos_5, test = "F")
-
-# We update our model now only including the relevant interactions.
-
-lm.autos_6 <- lm(log(price) ~ (age + powerPS + kilometer + gearbox + brand + fuelType +
-                                 notRepairedDamage + vehicleType + age:powerPS + age:kilometer +
-                                 age:gearbox + age:brand + age:fuelType + age:notRepairedDamage +
-                                 age:vehicleType + powerPS:kilometer + powerPS:gearbox + powerPS:brand +
-                                 powerPS:fuelType + powerPS:notRepairedDamage + powerPS:vehicleType +
-                                 kilometer:gearbox + kilometer:brand + kilometer:fuelType +
-                                 kilometer:notRepairedDamage + kilometer:vehicleType + gearbox:brand +
-                                 gearbox:fuelType + gearbox:notRepairedDamage + gearbox:vehicleType +
-                                 brand:fuelType + brand:vehicleType + fuelType:notRepairedDamage +
-                                 fuelType:vehicleType + notRepairedDamage:vehicleType),
-                               data = df)
-summary(lm.autos_6)
-drop1(lm.autos_6, test = "F")
-
-# All of our predictors and interactions do have a moderate to strong effect on our response variable.
-# The variability explained is around 87%.
+# All of our predictors and interactions do have a strong effect on our response variable.
+# The variability explained is around 85%.
 
 # We now check if we need to model non-linear effects. As previously seen in the graphical analysis.
 # The assumption is that the age variable has a quadratic effect on the response variable. Therefore
 # we try to model that with a poly function.
 
-lm.autos_7 <- lm(log(price) ~ (poly(age, degree = 2) + powerPS + kilometer + gearbox + brand + fuelType +
-                                 notRepairedDamage + vehicleType + poly(age, degree = 2):powerPS +
-                                 poly(age, degree = 2):kilometer + poly(age, degree = 2):gearbox +
-                                 poly(age, degree = 2):brand + poly(age, degree = 2):fuelType +
-                                 poly(age, degree = 2):notRepairedDamage + poly(age, degree = 2):vehicleType +
-                                 powerPS:kilometer + powerPS:gearbox + powerPS:brand +
-                                 powerPS:fuelType + powerPS:notRepairedDamage + powerPS:vehicleType +
-                                 kilometer:gearbox + kilometer:brand + kilometer:fuelType +
-                                 kilometer:notRepairedDamage + kilometer:vehicleType + gearbox:brand +
-                                 gearbox:fuelType + gearbox:notRepairedDamage + gearbox:vehicleType +
-                                 brand:fuelType + brand:vehicleType + fuelType:notRepairedDamage +
-                                 fuelType:vehicleType + notRepairedDamage:vehicleType),
+lm.autos_5 <- lm(log(price) ~ (poly(age, degree = 2) + powerPS + kilometer + gearbox + brand + fuelType +
+                                 notRepairedDamage + vehicleType + poly(age, degree = 2):brand + 
+                                 poly(age, degree = 2):vehicleType + kilometer:brand + kilometer:vehicleType),
                  data = df)
-anova(lm.autos_6, lm.autos_7)
-summary(lm.autos_7)
-drop1(lm.autos_7, test = "F")
 
-# There is pretty strong evidence that age needs a quadratic term. So we leave that.
-# We now have out final linear model with explained variability of around 88%. All predictors
-# do have an weak (gearbox:notRepairedDamage) to strong (various examples) effect on the
-# response variables. The coefficients for the parameters age, gearboxmauell, brandopel,
-# vehicleTypecoupe, # vehicleTypekleinwagen, vehicleTypekombi and vehicleTypelimousine are 
-# negative and have therefore a negative effect on the advertised price. The parameters 
-# powerPS, brandbmw, brandmercedes_benz, brandvolkswagen, fuelTypediesel, notRepairedDamagenein,
-# vehicleTypecabrio have a positive effect on the price. Interestingly, the kilometer parameters
-# show a different influence on price. Whereas for up to 30'000 kilometers they do have a
-# negative effect on prices, they have a positive effect in the range from 40'000 kilometers
-# to 100'000 kilometers. This is a bit counter-intuitive and it would be interesting to check
+anova(lm.autos_4, lm.autos_5)
+summary(lm.autos_5)
+drop1(lm.autos_5, test = "F")
+
+# There is strong evidence that age needs a quadratic term. So we leave that.
+
+# We now have our final linear model with explained variability of around 85%. All predictors do have a strong
+# effect on the response variable. The variables brand and vehicle type have a mixed effect.
+# The coefficients for the parameters powerPS, fuelTypediesel and notRepairedDamagenein are positive and therefore
+# have a positive effect on the response variable price. The coefficient for the parameter gearboxmanuell is negative
+# and therefore has a negative impact on price. Interestingly, the kilometer and age parameters show a different
+# influence on price. Whereas for up to 90'000 kilometers they have a mixed influence, the effect from 100'000
+# kilometers on is clearly negative. This is a bit counter-intuitive and it would be interesting to check
 # that with business people. An interpretation of all interaction terms is omitted.
 
-# Residual analysis and validation of model
+# Predicted values
+
+# Calculating in-sample RMSE
+
+pred.lm.autos_5.in_sample <- predict(lm.autos_5, df)
+error <- exp(pred.lm.autos_5.in_sample) - df$price
+sqrt(mean(error^2))
+
+# Our model is off by 2390 Euros for each car. This seems not to be satisfactory result.
+
+# Calculating in-sample MAPE
+
+residuals <- exp(pred.lm.autos_5.in_sample) - df$price
+ape <- abs(residuals) / df$price
+mean(ape)
+
+# This means that our price prediction deviates on average 30% from the actual price.
+
+# We want a model that does not overfit an generalize well. To answer the question if our model performs
+# well on new data, we split up our data set randomly into a test and training data set, apply our model
+# on the training data set and test it with the test data set.
+
+set.seed(42)
+rows <- sample(nrow(df))
+df.sample <- df[rows, ]
+
+split <- round(nrow(df) * 0.80)
+df.train <- df.sample[1:split, ]
+df.test <- df.sample[(split + 1):nrow(df.sample), ]
+
+lm.autos_5_sample <- lm(log(price) ~ (poly(age, degree = 2) + powerPS + kilometer + gearbox + brand + fuelType +
+                                 notRepairedDamage + vehicleType + poly(age, degree = 2):brand + 
+                                 poly(age, degree = 2):vehicleType + kilometer:brand + kilometer:vehicleType),
+                        data = df.train)
+
+# Calculating out-of-sample RMSE
+
+pred.lm.autos_5.out_sample <- predict(lm.autos_5_sample, df.test)
+error <- exp(pred.lm.autos_5.out_sample) - df.test$price
+sqrt(mean(error^2))
+
+# Calculating out-of-sample MAPE
+
+residuals <- exp(pred.lm.autos_5.out_sample) - df.test$price
+ape <- abs(residuals) / df.test$price
+mean(ape)
+
+# There are no major deviations from the in-sample testing, so at least our model generalizes well.
+# We leave it like that for the moment and hope for better results with different models.
+
+# TODO: Cross-validation and residual analysis.
 
 
+# Fitting a gam model -----------------------------------------------------
 
+# In our data set we do have age and powerPS, two continuous variables with a possible non-linear effect.
+# We allow them have a non-linear effect by specifying the smooth terms s(age) and s(powerPS) in the model.
+# As a basis we use our linear model from above without any interactions.
 
+gam.autos_1 <- gam(log(price) ~ s(age) + s(powerPS) + kilometer + gearbox + brand + fuelType +
+                                 notRepairedDamage + vehicleType,
+                 data = df)
+summary(gam.autos_1)
 
+# The summary output indicates that there there is strong evidence that age and powerPS have a non-linear
+# effect on the response variable. The estimated degrees of freedom quantify the complexity of the smooth
+# functions. Let’s visualise the effects of the variable age and powerPS.
 
+plot(gam.autos_1, residuals = TRUE, select = 1, col = alpha("black", 0.1), shade = TRUE)
+plot(gam.autos_1, residuals = TRUE, select = 2, col = alpha("black", 0.1), shade = TRUE)
 
+# From a visual perspective, it is hard to interpret the estimated degrees of freedom for the smooth terms
+# age and powerPS.
 
+# Let's now fit our gam model with the interactions from the previously defined linear model.
+
+gam.autos_2 <- gam(log(price) ~ s(age) + s(powerPS) + kilometer + gearbox + brand + fuelType +
+                     notRepairedDamage + vehicleType + s(age, by = brand) + s(age, by = vehicleType) +
+                     kilometer:brand + kilometer:vehicleType,
+                   data = df)
+summary(gam.autos_2)
+anova(gam.autos_1, gam.autos_2, test = "F")
+
+# There is strong evidence that the model with the interactions better explains the effect on the response
+# variable. We will trust our gam model by now and make some predictions in the same way we already did for
+# the linear model.
+
+# Calculating in-sample RMSE
+
+pred.gam.autos_2.in_sample <- predict(gam.autos_2, df)
+error <- exp(pred.gam.autos_2.in_sample) - df$price
+sqrt(mean(error^2))
+
+# Our model is off by 2130 Euros for each car. This is slightly better than with the linear model.
+
+# Calculating in-sample MAPE
+
+residuals <- exp(pred.gam.autos_2.in_sample) - df$price
+ape <- abs(residuals) / df$price
+mean(ape)
+
+# This means that our price prediction deviates on average 28% from the actual price.
+
+# Calculating out-of-sample RMSE
+
+gam.autos_2_sample <- gam(log(price) ~ s(age) + s(powerPS) + kilometer + gearbox + brand + fuelType +
+                     notRepairedDamage + vehicleType + s(age, by = brand) + s(age, by = vehicleType) +
+                     kilometer:brand + kilometer:vehicleType,
+                     data = df.train)
+
+pred.gam.autos_2.out_sample <- predict(gam.autos_2_sample, df.test)
+error <- exp(pred.gam.autos_2.out_sample) - df.test$price
+sqrt(mean(error^2))
+
+# Calculating out-of-sample MAPE
+
+residuals <- exp(pred.gam.autos_2.out_sample) - df.test$price
+ape <- abs(residuals) / df.test$price
+mean(ape)
+
+# There are no major deviations from the in-sample testing, so the model generalizes well.
+# Also for the gam model the results are not convincing .
+
+# TODO: Cross-validation and residual analysis.
