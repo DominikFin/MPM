@@ -33,6 +33,8 @@ library(readxl)
 library(zoo)
 library(car)
 library(mgcv)
+library(e1071) 
+library(caret)
 
 #gitcreds_set() #Only needed in the first setup when git sync is not working with password only
 ```
