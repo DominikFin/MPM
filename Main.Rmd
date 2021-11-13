@@ -700,22 +700,46 @@ There are no major deviations from the in-sample testing, so the model generaliz
 # TODO: Cross-validation and residual analysis.
 
 
+## Support Vector Machines
 
+In this part we use support vector machines models for classification and regression analysis.
 
-### Dominik
-
-```{r cleaningDominik1}
-# pairs(price ~ kilometer + powerPS+yearOfRegistration,
-#       data = df,
-#       pch = ".",
-#       upper.panel = panel.smooth)
+```{r}
+#creating a smaller dataset for fist tests
+set.seed(143)
+df_sample_small<-df[sample(nrow(df), 5000), ]
 ```
 
-```{r cleaningDominik2}
-# auswahl_brand <- filter(df, brand == "fiat")
-# ggplot(auswahl_brand, aes(x=kilometer,y=price,color=model)) +
-#   geom_point(position = "jitter",alpha=0.5)+
-#   geom_smooth(method="glm")
+```{r}
+df_sample_small%>%
+  ggplot(aes(x = kilometer, y = price, color = notRepairedDamage)) +
+  geom_jitter(alpha = 1)
+```
+```{r}
+# Comparing the average price per brand repaired and unrepaired
+svm_df_mbr<-df%>%
+group_by(notRepairedDamage, brand) %>%
+summarize(Mean = mean(price, na.rm=TRUE))%>%
+arrange(brand)
+
+
+svm_df_mbr%>%
+  ggplot(aes(y = brand, x = Mean, color = notRepairedDamage)) +
+  geom_point(alpha = 1)
+```
+We can see that cars with not repaired Damages are cheaper in every brand which makes sense from a business point of view.
+
+```{r}
+# Comparing the average price per brand repaired and unrepaired
+svm_df_mmr<-df%>%
+group_by(notRepairedDamage, model) %>%
+summarize(Mean = mean(price, na.rm=TRUE))%>%
+arrange(model)
+
+
+svm_df_mmr%>%
+  ggplot(aes(x = model, y = Mean, color = notRepairedDamage)) +
+  geom_point(alpha = 1)
 ```
 
 ### Lars
