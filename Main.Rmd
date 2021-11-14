@@ -702,46 +702,184 @@ There are no major deviations from the in-sample testing, so the model generaliz
 
 ## Support Vector Machines
 
-In this part we use support vector machines models for classification and regression analysis.
+In this part we use support vector machines models for classification. Because the main application area for svm are classification tasks we decided to create a new variable called "priceGroup" which splits the continuse variable price into 4 groups. to find a suitable range for the groups we boxplot the price again and have a look at the 25% / 50% and 75% quartile.
 
 ```{r}
-#creating a smaller dataset for fist tests
-set.seed(143)
-df_sample_small<-df[sample(nrow(df), 5000), ]
+#Adding price groups for classifaction purpose
+quantile(df$price)
 ```
+
 
 ```{r}
-df_sample_small%>%
-  ggplot(aes(x = kilometer, y = price, color = notRepairedDamage)) +
-  geom_jitter(alpha = 1)
+#Adding price groups for classifaction purpose
+df_svm <- df
+df_svm$priceGroup <- as.factor(sapply(df$price, function(x)
+  if (x < 1550)   'cheap'
+  else if (x <=3400)  'economy'
+  else if (x <=7000) 'upscale'
+  else 'premium'
+))
+df_svm$kilometer <- as.numeric(df_svm$kilometer)
 ```
-```{r}
-# Comparing the average price per brand repaired and unrepaired
-svm_df_mbr<-df%>%
-group_by(notRepairedDamage, brand) %>%
-summarize(Mean = mean(price, na.rm=TRUE))%>%
-arrange(brand)
 
-
-svm_df_mbr%>%
-  ggplot(aes(y = brand, x = Mean, color = notRepairedDamage)) +
-  geom_point(alpha = 1)
-```
 We can see that cars with not repaired Damages are cheaper in every brand which makes sense from a business point of view.
 
+## Model 1 - Use all possible predictors for SVM (linear)
+
 ```{r}
-# Comparing the average price per brand repaired and unrepaired
-svm_df_mmr<-df%>%
-group_by(notRepairedDamage, model) %>%
-summarize(Mean = mean(price, na.rm=TRUE))%>%
-arrange(model)
-
-
-svm_df_mmr%>%
-  ggplot(aes(x = model, y = Mean, color = notRepairedDamage)) +
-  geom_point(alpha = 1)
+set.seed(193)
+df_svm_1_full<-df_svm[c("priceGroup","vehicleType","gearbox","powerPS","model","kilometer","fuelType","brand","notRepairedDamage","postalCode","age")]
+df_svm_1_sample<-df_svm_1_full[sample(nrow(df), 20000), ]
 ```
 
-### Lars
+## Prepare the Data for Training
 
-### Leo
+```{r}
+set.seed(193)
+indices <- createDataPartition(df_svm_1_sample$priceGroup, p=.85, list = F)
+```
+
+### Create some easy Variables to access Data
+
+```{r}
+train <- df_svm_1_sample %>%
+  slice(indices)
+test_in <- df_svm_1_sample %>%
+  slice(-indices) %>%
+  select(-priceGroup)
+test_truth <- df_svm_1_sample %>%
+  slice(-indices) %>%
+  pull(priceGroup)
+```
+
+
+## Train the SVM
+
+Call the `svm` function using the default `cost = 10` parameter.
+
+```{r}
+set.seed(123)
+cars_svm <- svm(priceGroup ~ ., train, kernel = "linear", scale = TRUE, cost = 10)
+```
+
+Of course the visualization is a bit difficult as we have some classification regions in four dimensions.
+
+So plot first the resulting classification for the two Petal leaf dimensions
+
+```{r}
+plot(cars_svm, train, kilometer ~ age)
+```
+
+## Make Predictions
+
+```{r}
+test_pred <- predict(cars_svm , test_in)
+table(test_pred)
+```
+## Evaluate the Results
+
+```{r}
+conf_matrix <- confusionMatrix(test_pred, test_truth)
+conf_matrix
+```
+
+## Model 2 - Use all possible predictors for SVM (radial)
+
+
+```{r}
+set.seed(123)
+cars_svm2 <- svm(priceGroup ~ ., train, kernel = "radial", scale = TRUE, cost = 10)
+summary(cars_svm2)
+```
+
+```{r}
+plot(cars_svm2, train, kilometer ~ age)
+```
+
+
+```{r}
+test_pred <- predict(cars_svm2, test_in)
+table(test_pred)
+```
+```{r}
+conf_matrix <- confusionMatrix(test_pred, test_truth)
+conf_matrix
+```
+
+
+## Model 3 - Use only use model (linear)
+
+
+```{r}
+set.seed(123)
+cars_svm2 <- svm(priceGroup ~ model, train, kernel = "linear", scale = TRUE, cost = 10)
+summary(cars_svm2)
+```
+
+
+```{r}
+test_pred <- predict(cars_svm2, test_in)
+table(test_pred)
+```
+```{r}
+conf_matrix <- confusionMatrix(test_pred, test_truth)
+conf_matrix
+```
+
+## Model 4 - Use only use model (radial)
+
+
+```{r}
+set.seed(123)
+cars_svm2 <- svm(priceGroup ~ model, train, kernel = "radial", scale = TRUE, cost = 10)
+summary(cars_svm2)
+```
+
+
+```{r}
+test_pred <- predict(cars_svm2, test_in)
+table(test_pred)
+```
+```{r}
+conf_matrix <- confusionMatrix(test_pred, test_truth)
+conf_matrix
+```
+
+## Model 5 - Use only use kilometer and age (linear)
+
+
+```{r}
+set.seed(123)
+cars_svm2 <- svm(priceGroup ~ age + kilometer, train, kernel = "linear", scale = TRUE, cost = 10)
+summary(cars_svm2)
+```
+
+
+```{r}
+test_pred <- predict(cars_svm2, test_in)
+table(test_pred)
+```
+```{r}
+conf_matrix <- confusionMatrix(test_pred, test_truth)
+conf_matrix
+```
+
+
+## Model 6 - Use only use kilometer and age (radial)
+
+
+```{r}
+set.seed(123)
+cars_svm2 <- svm(priceGroup ~ age + kilometer, train, kernel = "radial", scale = TRUE, cost = 10)
+summary(cars_svm2)
+```
+
+
+```{r}
+test_pred <- predict(cars_svm2, test_in)
+table(test_pred)
+```
+```{r}
+conf_matrix <- confusionMatrix(test_pred, test_truth)
+conf_matrix
+```
