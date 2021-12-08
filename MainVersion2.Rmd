@@ -1,0 +1,663 @@
+---
+title: "Machine Learning and Predictive Modelling 1"
+author: "Leo Rettich, Lars Neyerlin, Nicolas Ott, Dominik Finzer"
+due date: "12/17/2021"
+output:
+  pdf_document: default
+  html_document: default
+urlcolor: blue
+linkcolor: black
+---
+
+\tableofcontents
+
+\newpage
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+# Install relevant packages
+
+packages <- c("gitcreds",
+              "tidyverse",
+              "ggplot2",
+              "readxl",
+              "zoo",
+              "car",
+              "mgcv",
+              "gmodels",
+              "e1071",
+              "caret",
+              "lattice",
+              "lubridate",
+              "gridExtra",
+              "reshape2",
+              "nnet")
+installed_packages <- packages %in% rownames(installed.packages())
+if (any(installed_packages == FALSE)) {
+  install.packages(packages[!installed_packages])
+}
+
+# Load relevant packages
+
+library(gitcreds)
+library(tidyverse)
+library(ggplot2)
+library(readxl)
+library(zoo)
+library(car)
+library(mgcv)
+library(gmodels)
+library(e1071) 
+library(caret)
+library(lattice)
+library(lubridate)
+library(gridExtra)
+library(reshape2)
+library(nnet)
+
+```
+
+# Use-Case description & data source
+
+Used cars are currently in greater demand than they have been for a long time. Due to the pandemic, the available supply of new cars is stagnating, which has led to a sharp rise in demand for used cars. This increase in demand also brings with it a significant rise in the price of used cars. The used car platforms are increasingly competing with each other. With this in mind, it is important to provide the advertiser with the best possible user experience. How about directly suggesting a price to the customer for the advertised model?
+
+In the following, a proof-of-concept will be created, which is aimed at platform providers who want to make their offer even more attractive. Different prediction models will be analyzed, which aim at a plausible price estimation based on attributes like age, number of kilometers and performance. For this purpose, five popular car models are examined as examples. The data comes from the [autoscout.de](https://www.autoscout24.de/) platform, the largest used car platform in Germany with 700,000 offers (as of December 2021). In order to ensure that the data is up to date, the project team generated it specifically via web scraper. For each offer in one of the five previously defined car models, the following attributes were scraped:
+
+Models^[The aim of this study is to check the feasibility of the desired price-prediction feature, therefore it was decided to reduce the number of models to only five. Models were chosen according to their popularity in the respective country Germany. Every model shows a reasonable number of offers on the online platform.]:
+- Audi A6
+- Ford Fiesta
+- Opel Corsa
+- Seat Leon
+- Skoda Octavia
+
+Attributes^[To ensure actuality of the data and as there was no count data in the original data set, it was decided to scrape actual data from the website.]:
+- brand
+- model
+- currency
+- price
+- offer_type
+- power_ps
+- previous_owners (count data)
+- registration_year
+- registration_month
+- kilometer
+- fuel_type
+- gear_type
+- ZIP_code
+- crawl_timestamp
+
+# Data Preparation & Cleaning
+
+```{r load, cache=TRUE}
+
+# Load data
+
+df <- read_excel("data/autoscout24.xlsx")
+
+# Prepare data
+
+df["registration"] = as.Date(as.yearmon(paste(df$year_registration,
+                                              df$month_registration,
+                                              sep = "-")))
+
+df$crawl_timestamp = as.Date(df$crawl_timestamp)
+
+df["age_in_days"] = as.numeric(df$crawl_timestamp - df$registration)
+
+df["car_model"] = paste(df$brand, df$model)
+
+# Clean data
+
+df <- df %>%
+  mutate_if(sapply(df, is.character), as.factor) %>%
+  mutate(previous_owners = as.integer(previous_owners)) %>%
+  select(-c("brand",
+            "model",
+            "currency",
+            "year_registration",
+            "month_registration",
+            "registration",
+            "ZIP_code",
+            "crawl_timestamp")) %>%
+  relocate(car_model)
+
+```
+
+# Graphical analysis
+
+The individual variables of the data set can be categorized as follows.
+
+Response variable:
+- price
+
+Continuous predictors:
+- age_in_days
+- kilometer
+- power_in_ps
+- previous_owners^[For the application of a generalised linear model with family set to "Poisson" the variable "previous_owners" is used as response variable.]
+
+Categorical predictors:
+- car_model
+- offer_type
+- fuel_type
+- gear_type
+
+The following section serves to get an overview of the different distributions of each variable.
+
+```{r generalanalysis}
+
+# Distribution of response variable and continuous predictors
+
+par(mfrow = c(2,2))
+
+hist(df$price, xlab = "price", main = "Histogram response variable price")
+hist(df$age_in_days, xlab = "age_in_days in days", main = "Histogram predictor age")
+hist(df$power_in_ps, xlab = "power_in_ps", main = "Histogram predictor power")
+hist(df$kilometer, xlab = "kilometer", main = "Histogram predictor kilometer")
+
+# Further investigations
+
+summary(df$price)
+ecdf(df$price)(30000)
+ecdf(df$age_in_days)(1460)
+ecdf(df$power_in_ps)(200)
+ecdf(df$kilometer)(100000)
+
+```
+
+The response variable price shows a right-skewed distribution. Furthermore, the price can be considered as "amount" Therefore it will be log-transformed in the modelling part. Prices range from 390 to 77'950 Euros. 93% of all observations show a price which is 30'000 or less.
+
+All the other predictors show also some kind of right-skewedness. Half of the cars offered are younger than four years (1460 / 365 ~ 4 years). Only 10% off all cars do have more than 200 PS and only 25 % of all cars do have a mileage which is above 100'000 kilometers.
+
+```{r generalanalyis2}
+
+# Distribution of response variable and continuous predictors
+
+par(mfrow = c(2,2))
+
+barplot(table(df$car_model), main = "Car models")
+barplot(table(df$gear_type), main = "Gear types")
+barplot(table(df$fuel_type), main = "Fuel type")
+barplot(table(df$offer_type), main = "Offer type")
+
+table(df$car_model)
+table(df$gear_type)
+table(df$fuel_type)
+table(df$offer_type)
+range(df[df$offer_type=="Jahreswagen", "age_in_days"])
+
+```
+
+The Opel Corsa has the largest share among all car models with more than 4'000 cars advertised. The majority of cars come with manual gear type. There are only 152 cars which fall into the category "Hybrid" (named Elektrobenzin). This is not a big surprise, as the fuel type Hybrid is only gathering momentum recently. It is not entirely clear for what the category "Jahreswagen" stands for but most certainly it has something to do with the age of the cars. The age for "Jahreswagen" ranges from 33 to 857 days.
+
+The following section checks the influence of each predictor on the response variable graphically. As our response variable is right-skewed (see section above), we log-transform it also for the graphical analysis.
+
+## Analysis of continuous variables:
+
+```{r checkcontvariables, message=FALSE}
+
+# Create template
+
+template.scatterplot.df <- ggplot(data = df,
+                                  mapping = aes(y = log(price))) +
+  geom_point(alpha = 0.1) +
+  geom_smooth()
+
+# Plot variables
+
+p1 <- template.scatterplot.df + aes(x = age_in_days) + ggtitle("price versus age")
+p2 <- template.scatterplot.df + aes(x = power_in_ps) + ggtitle("price versus power")
+p3 <- template.scatterplot.df + aes(x = kilometer) + ggtitle("price versus kilometer")
+
+grid.arrange(p1, p2, p3, nrow = 2)
+
+```
+
+The relationship between price and age looks linear until an age of around 7000 days. Also the variance is pretty stable until then. Afterwards the variability increases and there might be a positive effect on the price variable. This may be modeled by a quadratic term.
+
+There is clearly a positive effect of power on price. The effect is stronger in the range from 60 PS to around 100. Afterwards there are some bumps. This relationship may require a higher order term. There are not many observations for which the PS are higher than 300.
+
+The mileage of the cars does have a negative effect on the price which is logical from a business point of view. It looks mostly like a linear relationship. There are only few observations for mileages above 200'000 kilometers.
+
+
+## Analysis of categorical variables
+
+```{r checkcatvariables}
+
+# Create template
+
+template.boxplot.df <- ggplot(data = df,
+                              mapping = aes(y = log(price))) +
+  geom_boxplot() +
+  theme(axis.title.x = element_blank())
+
+# Plot variables
+
+p4 <- template.boxplot.df + aes(x = car_model) + ggtitle("price among car models")
+p5 <- template.boxplot.df + aes(x = gear_type) + ggtitle("price among gear types")
+p6 <- template.boxplot.df + aes(x = fuel_type) + ggtitle("price among fuel types")
+p7 <- template.boxplot.df + aes(x = offer_type) + ggtitle("price among offer types")
+
+grid.arrange(p4, p5, p6, p7, nrow = 2)
+
+```
+
+There are considerable differences among the prices for the different models. The Audi A6 is the most expensive in general whereas the Opel Corsa seems to be lowest in price. On the other hand, the variability for the Opel Corsa seems to be the highest whereas the Seat Leon shows the lowest variability in price.
+
+It seems to be that cars with automatic gear type come with higher prices as well as cars with fuel type Diesel and ElektroBenzin are more expensive than cars with fuel type Benzin. This makes perfectly sense from a business point of view. sense.
+
+Overall, Jahreswagen have generally a slightly higher price than Gebrauchtwagen.
+
+## Checking for different effects among the models
+
+It is interesting to see whether or not the effects of different predictors differ among the car models or to put it differently, if there is any interaction of certain predictors among the different car models. In this case, the variable car model serves as control variable. To test these kind of interactions the following plots are used. 
+
+```{r checkinteractions, cache = TRUE, message = FALSE}
+
+# Effect of age on price among car models
+
+ggplot(data = df,
+       mapping = aes(y = log(price), x = age_in_days)) +
+  geom_point(alpha = 0.1) +
+  geom_smooth() +
+  facet_wrap(. ~ car_model)
+
+```
+
+We can see that the effect from age on price behaves similarly among the different car models. From a certain age on, the negative effect flattens out. This could be due to very few observations or it could signal a positive effect on price from a certain age on.
+
+```{r checkinteractions2, cache = TRUE, message = FALSE}
+
+# Effect of power on price among car models
+
+ggplot(data = df,
+       mapping = aes(y = log(price), x = power_in_ps)) +
+  geom_point(alpha = 0.1) +
+  geom_smooth() +
+  facet_wrap(. ~ car_model)
+
+```
+
+There are mixed effects among the different car models. Each car model seems to have its own effect of the power variable on the price. Therefore, it might be advisable to model ps and car model with an interaction term.^[The power variable seems to be a special one as it could also be interpreted as a categorical variable. One could imagine, that there are not infinite levels of PS within a car model. Furthermore, there seems to be a clearly positive effect when increasing PS at a low level but on the other hand, the effect is very volatile from a certain PS level on.]
+
+
+```{r checkinteractions3, cache = TRUE, message=FALSE}
+
+# Effect of kilometer on price among car models
+
+ggplot(data = df,
+       mapping = aes(y = log(price), x = kilometer)) +
+  geom_point(alpha = 0.1) +
+  geom_smooth() +
+  facet_wrap(. ~ car_model)
+
+```
+
+In terms of the direction of the effect all car models show the same linear behavior. But considering the strength of the effect, the Opel Corsa shows a much steeper price depreciation than for example the Skoda Octavia. Therefore, an interaction term makes sense.
+
+# Fitting models
+
+## Fitting a linear model
+
+We start by including all predictors without any interactions:
+
+```{r lm, cache = TRUE}
+
+# Set up model, check adjusted R-squared
+
+lm.autos_1 <- lm(log(price) ~ .,
+                 data = df)
+summary(lm.autos_1)$adj.r.squared
+
+# Check for collinearity
+
+vif(lm.autos_1)
+
+```
+
+The model seems to be quite good with almost 93% of the variability explained. There are no signs of collinearity. In other words, there is no predictor which is explained by a linear combination of some other predictors. This is a bit of a surprise, as you might think that a combination of variables such as PS, fuel_type and gear_type could lead to the car model. Or that the number of previous owners show some dependency with the age and kilometer variable.
+
+As a next step, we test if all predictors do have a significant effect on the response variable:
+
+```{r checksig, cache = TRUE}
+
+# Checking for significance
+
+drop1(lm.autos_1, test = "F")
+
+```
+We can clearly state that all predictors except for "previous_owners do have a strong effect on the response variable. The effect of "previous_owners" may be questionable. We now include the relevant two-fold interactions as figured out in the graphical analysis.
+
+```{r lm2, cache = TRUE}
+
+# Update linear model with interaction terms
+
+lm.autos_2 <- update(lm.autos_1, . ~ . + power_in_ps:car_model + kilometer:car_model,
+                     data = df)
+
+summary(lm.autos_2)$adj.r.squared
+
+```
+
+Including the relevant two-fold-interactions, the variability explained increases only slightly. Again we check if all predictors including the two-fold-interactions have a significant effect on the response variable.
+
+```{r checksig2, cache = TRUE}
+
+# Checking for significance
+
+drop1(lm.autos_2, test = "F")
+
+```
+
+All of our predictors and interactions^[There are other variables which interact significantly, i.e. the response variable depends on a combination of these predictors. These can be found in the rmarkdown-file where all two-fold interactions were tested in the model "lm.autos_3. As the model will not get much better it was preferred to keep it simple.] show a moderate to strong effect on our response variable.
+
+
+```{r lm3, echo=FALSE, results='hide'}
+
+# Update linear model with all  two-fold interactions
+
+lm.autos_3 <- lm(log(price) ~ (.)^2, data = df)
+summary(lm.autos_3)$r.squared
+
+# Checking for significance
+
+drop1(lm.autos_3, test = "F")
+
+```
+
+We now check if we need to model non-linear effects. As previously seen in the graphical analysis. The assumption is that the age_in_days variable has a quadratic effect on the response variable. Therefore we try to model that with a poly function.
+
+```{r lm4, cache = TRUE}
+
+# Update linear model with higher order terms
+
+lm.autos_4 <- update(lm.autos_2, . ~ . - age_in_days + poly(age_in_days, degree = 2),
+                     data = df)
+
+# Checking for significance between lm 2 and 4
+
+anova(lm.autos_2, lm.autos_4)
+summary(lm.autos_4)
+
+```
+
+There is strong evidence that age_in_days needs a quadratic term. So we leave that.
+
+We now have our final linear model with explained variability of around 94%. All predictors do have a strong effect on the response variable except for previous owners. All car models have a negative effect on price as the default model was set to Audi A3, which is in general the most expensive of the five models considered. The offer type "Jahreswagen" has a positive effect on price which is logical due to the lower age of the cars. The number of previous owners negatively influence the price of the car which also seems natural, as well as the kilometer and age variable. The fuel type levels Diesel and Elektrobenzin both have a positive effect, as well as PS. Finally, the gear type "Schaltgetriebe" has a negative effect on price compared to the default value "Automatik" which is represented in the intercept parameter. An interpretation of all interaction terms is omitted.
+
+### TODO: Interpreting coefficients
+
+### Predictions for the linear model
+
+```{r predlm, cache = TRUE}
+
+# Calculating in-sample RMSE and MAPE
+
+pred.lm.autos_4.in_sample <- predict(lm.autos_4, df)
+res.lm.in_sample <- exp(pred.lm.autos_4.in_sample) - df$price
+sqrt(mean(res.lm.in_sample^2))
+ape.lm.in.sample <- abs(res.lm.in_sample) / df$price
+mean(ape.lm.in.sample)
+
+```
+
+Considering all predictions, our model is on average off by around 3000 Euros. This means that our price prediction deviates on average around 13% from the actual offering price.
+
+As we want a model that does not overfit an generalize well, i.e. one that performs well on new data, we randomly split up our data into a test and training set. Afterwards, apply the linear model on the training data set and test it with the test data set.
+
+```{r predlm2, cache = TRUE}
+
+# Create training and test set
+
+set.seed(42)
+indices <- createDataPartition(df$car_model, p=.85, list = F)
+
+df.train <- df %>%
+  slice(indices)
+df.test <- df %>%
+  slice(-indices)
+
+lm.autos_4_sample <- update(lm.autos_4, . ~ . ,
+                     data = df.train)
+
+# Calculating out-of-sample RMSE and MAPE
+
+pred.lm.autos_4.out_sample <- predict(lm.autos_4_sample, df.test)
+res.lm.out.sample <- exp(pred.lm.autos_4.out_sample) - df.test$price
+sqrt(mean(res.lm.out.sample^2))
+ape.lm.out.sample <- abs(res.lm.out.sample) / df.test$price
+mean(ape.lm.out.sample)
+
+```
+There are no major deviations from the in-sample testing. That means the linear model generalizes well.
+
+### TODO: Cross-validation and residual analysis.
+
+## Fitting a gam model
+
+In our data set we do have age_in_days, kilometer and power_in_ps, three continuous variables with a possible non-linear effect on the response variable. We allow them to have a non-linear effect by specifying the smooth terms s(age_in_days), s(kilometer) and s(power_in_ps) fitting a gam model. As a basis we use our linear model from above without any interactions.
+
+```{r gam1, results = "hide", cache = TRUE}
+
+# Set up model, check summary output
+
+gam.autos_1 <- gam(log(price) ~ s(age_in_days) + s(kilometer) + s(power_in_ps) + previous_owners
+                   + car_model + offer_type + fuel_type + gear_type,
+                   data = df)
+summary(gam.autos_1)
+
+```
+
+The summary output indicates that there there is strong evidence that age_in_days, kilometer and power_in_ps have a non-linear effect on the response variable. The estimated degrees of freedom quantify the complexity of the smooth functions. Let’s visualize the effects of the variable age_in_days, kilometer and power_in_ps.
+
+```{r plotgam, cache = TRUE}
+
+# Plot smooth terms
+
+par(mfrow=c(2,2))
+
+plot(gam.autos_1, residuals = TRUE, select = 1, col = alpha("black", 0.1), shade = TRUE)
+plot(gam.autos_1, residuals = TRUE, select = 2, col = alpha("black", 0.1), shade = TRUE)
+plot(gam.autos_1, residuals = TRUE, select = 3, col = alpha("black", 0.1), shade = TRUE)
+
+```
+
+From a visual perspective, it is hard to interpret the estimated degrees of freedom for the different smooth terms. 
+
+Now we fit the gam model again including the interactions previously defined in the linear model.
+
+```{r gam2, cache = TRUE}
+
+# Update gam model
+
+gam.autos_2 <- update(gam.autos_1, . ~ . + s(kilometer, by = car_model) + s(power_in_ps, by = car_model),
+                     data = df)
+
+summary(gam.autos_2)$r.sq
+anova(gam.autos_1, gam.autos_2, test = "F")
+
+```
+
+There is strong evidence that the model with the interactions better explains the effect on the response variable. We will trust our gam model by now and make some predictions in the same way we already did for the linear model.
+
+### Predictions for the gam model
+
+```{r predgam, cache = TRUE}
+
+# Calculating in-sample RMSE and MAPE
+
+pred.gam.autos_2.in_sample <- predict(gam.autos_2, df)
+res.gam.in.sample <- exp(pred.gam.autos_2.in_sample) - df$price
+sqrt(mean(res.gam.in.sample^2))
+ape.gam.in.sample <- abs(res.gam.in.sample) / df$price
+mean(ape.gam.in.sample)
+
+# Calculate gam model with training set
+
+gam.autos_2_sample <- update(gam.autos_2, . ~ . ,
+                             data = df.train)
+
+# Calculating out-of-sample RMSE and MAPE
+
+pred.gam.autos_2.out_sample <- predict(gam.autos_2_sample, df.test)
+res.gam.out.sample <- exp(pred.gam.autos_2.out_sample) - df.test$price
+sqrt(mean(res.gam.out.sample^2))
+ape.gam.out.sample <- abs(res.gam.out.sample) / df.test$price
+mean(ape.gam.out.sample)
+
+```
+
+Compared to the linear model, the gam model does not really improve the predictions although it is more complex. There are no major deviations from the in-sample testing, so again the model generalizes well.
+
+### TODO: Cross-validation and residual analysis.
+
+## Fitting a generalised linear Model with family set to Poisson
+
+Is it possible to infer the number of previous owners given the other variables in the data set such as age and price? Let's try that out with a linear model where we change the underlying distribution to "Poisson". For this model we change the response variable from price to previous owners. To find out about the distribution of the variable previous owners we draw a histogram. To see whether there are major price deviations among the different levels of previous owners we draw a boxplot
+
+```{r prevowners, cache=TRUE, message = FALSE}
+
+# Draw histogram and boxplot for previous owners
+
+pct <- df %>%
+  count(previous_owners = factor(previous_owners)) %>%
+  mutate(pct = prop.table(n)) %>%
+  mutate(pct = round(pct,3))
+p8 <- ggplot(pct, aes(x=previous_owners, y=n, label = scales::percent(pct))) + 
+  geom_bar(stat = "identity") +
+  geom_text(position = position_dodge(width = .9),
+              vjust = -0.5,
+              size = 3) +
+  theme(axis.title.x = element_blank())
+p9 <- ggplot(data = df, mapping = aes(x= as.factor(previous_owners), y = age_in_days)) +
+  geom_boxplot(alpha = 0.1) +
+  theme(axis.title.x = element_blank())
+p10 <- ggplot(data = df, mapping = aes(x= age_in_days, y = previous_owners)) +
+  geom_point(alpha = 0.1, position=position_jitter(height=.2, width=.2)) +
+  geom_smooth()
+
+grid.arrange(p8, p9, p10, nrow = 2, top = "previous owners")
+
+```
+
+In the first plot we can see that 95% of all cars do have either 1 or 2 previous owners. To check the influence of our predictors on the response variable we pick the predictor age_in_days as it seems natural that the age of the car could be somehow connected to the number of previous owners. The second plot indicates that indeed a higher age corresponds to a higher number of previous owners. The variability of age among the different numbers of previous owners is very different and there is no clear pattern visible. This can be due to the fact that there are only very few cars with a number of previous owners above 2. From this point of view, it is questionable that the poisson model will lead to sensible results. The third plot shows again the influence of the age variable on the number of previous owners with interchanged axis. The blue line suggest a positive effect from age on the number of previous owners. The points reflect the number of observations as well as the variability in age among the different levels of previous owners 1 to 8.
+
+We nevertheless try an fit a linear model for our response variable previous owners with the poisson distribution.
+
+
+```{r glmpoisson}
+
+# Set up linear model with family set to "poisson"
+
+glm.autos1 <- glm(previous_owners ~ .,
+                  family = "poisson",
+                  data = df)
+summary(glm.autos1)$deviance
+
+# Set up linear model with family set to "quasipoisson"
+
+glm.autos2 <- update(glm.autos1, . ~ . ,
+                     family = "quasipoisson")
+summary(glm.autos2)$deviance
+
+# Checking for significance
+
+drop1(glm.autos2, test = "F")
+
+```
+
+Both models yield the same residual deviance. The dispersion parameter for the second model was set to 0.19. This actually means the opposite of overdispersion. The variability of a car expected to have a larger number of previous owners does not increase linearly with the mean but slower at a rate of 0.19. Let's interpret one of the coefficients, namely the age variable.
+
+```{r analyzecoeffpoisson}
+coef(glm.autos2)["age_in_days"]
+coef.age.1000 <- coef(glm.autos2)["age_in_days"] * 1000
+exp(coef.age.1000)
+```
+As expected, the coefficient of the age variable is slightly positive as an increasing age leads to a potential increase in the number of previous owners. The correct interpretation for this coefficient is: “For a given car, increasing the age by 1000 days, this would result in a number of previous owners which is about 10% higher. It is questionable if this really makes sense.
+
+Lastly, we check the predictions on the number of previous owners with the already known methods for calculating the RMSE and MAPE.
+
+### Predictions for the glm model with family set to poisson
+
+```{r predpoisson, cache = TRUE}
+
+# Calculating in-sample RMSE and MAPE
+
+pred.glm.autos2.in_sample <- predict(glm.autos2, df)
+res.glm2.in.sample <- exp(pred.glm.autos2.in_sample) - df$previous_owners
+sqrt(mean(res.glm2.in.sample^2))
+ape.glm2.in.sample <- abs(res.glm2.in.sample) / df$previous_owners
+mean(ape.glm2.in.sample)
+
+# Calculate gam model with training set
+
+glm.autos2_sample <- update(glm.autos2, . ~ . ,
+                            data = df.train)
+
+# Calculating out-of-sample RMSE and MAPE
+
+pred.glm.autos2.out_sample <- predict(glm.autos2_sample, df.test)
+res.glm2.out.sample <- exp(pred.glm.autos2.out_sample) - df.test$previous_owners
+sqrt(mean(res.glm2.out.sample^2))
+ape.glm2.out.sample <- abs(res.glm2.out.sample) / df.test$previous_owners
+mean(ape.glm2.out.sample)
+
+```
+As expected, the accuracy of this model is quite bad. Considering all predictions, our model is on average off by around half a previous owner. This means, that our prediction deviates on average around 30% from the actual number of previous owners for a given car.
+
+### TODO: Skip cross-validation and residual analysis.
+
+## Fitting a generalised linear Model with family set to binomial
+
+We are interested if we could predict whether an advertised car comes with gear type "Automatik" or not given the other variables in the data set. In order to answer this question we need to add a special column to our data set, containing a one whenever the car has automatic gear type and containing a zero otherwise.
+
+```{r glmbinomial}
+
+# One-hot encoding of the variable "gear_type"
+
+df.binomial <- df %>%
+  mutate(gear_type_Automatik = as.numeric(stringr::str_detect(gear_type, "Automatik")))
+
+# Set up binomial model
+
+glm.binomial_1 <- glm(gear_type_Automatik ~ . - gear_type,
+                      family = "binomial",
+                      data = df.binomial)
+
+drop1(glm.binomial_1, test = "F")
+
+```
+
+The residual deviance is high which could lead to the interpretation that the predictions might be not very accurate.
+
+### Predictions for the glm model with family set to binomial
+
+```{r predbinomial}
+
+fitted.gear_type <- ifelse(fitted(glm.binomial_1) < 0.5,
+                           yes = 0, no = 1)
+
+table(obs = df.binomial$gear_type_Automatik, 
+      fit = fitted.gear_type)
+
+```
+
+Almost 85% of all cars were classified correctly (diagonal entries). 784 cars were mistakenly classified as cars with gear type "Automatik" and 1748 cars were mistakenly classified as cars with gear type "Schaltgetriebe".
+
+Taking the logistic regression one step further, we are interested if we could also classify the different car models given our data set.
+
+### Multinomial regression
+
+```{r multinomial}
+
+multinom.car_models <- multinom(car_model ~ . ,
+                                trace = FALSE,
+                                data = df)
+
+table(obs = df$car_model, 
+      fit = predict(multinom.car_models, data = df))
+
+```
+
+Only 60% of all cars were classified correctly (diagonal entries). The classification for the car_model "Audi A6" clearly works best whereas the classification for the car model "Ford Fiesta" is poor.
