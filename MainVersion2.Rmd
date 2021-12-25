@@ -48,7 +48,7 @@ library(zoo)
 library(car)
 library(mgcv)
 library(gmodels)
-library(e1071) 
+library(e1071)
 library(caret)
 library(lattice)
 library(lubridate)
@@ -663,4 +663,100 @@ table(obs = df$car_model,
 Only 60% of all cars were classified correctly (diagonal entries). The classification for the car_model "Audi A6" clearly works best whereas the classification for the car model "Ford Fiesta" is poor.
 
 
+## Support Vector Machines
+
+In this part, we want to try the Support Vector Machine (SVM) as a model. First, we want to predict the price using a Support Vector Regression as an alternative to the linear model seen before.Since the main application of SVMs is classification problems, in the second part we also try to predict the model of the car based on the given attributes.
+
+### Support Vector Regression
+
+```{r svm_regression}
+svm.autos_reg <- svm(price~., data=df.train)
+print(svm.autos_reg)
+```
+
+```{r svm_regression}
+svm.autos_pred <- predict(svm.autos_reg, df.test)
+x <- 1:length(df.test$price)
+plot(x, df.test$price, pch=18, col="red")
+lines(x, svm.autos_pred, lwd="1", col="blue")
+```
+
+```{r svm_regression}
+sqrt(mean((df.test$price - svm.autos_pred)^2))
+```
+
+Taking all predictions into account, the model deviates from the actual offer price by around 2833 euros on average. This means that our price prediction is slightly better compared to the linear model (2985 Euros).
+
+### Support Vector Machine (Classification Problem)
+To try also the classification possibilities we now try to predict the model based on the given attributes. We will test two models for this classification problem. first a model with a linear kernel and afterwards one with a radial kernel. The accuracy will be compared with that of the previously used multiple regression model, which had the same classification task.
+
+#### Prepare the Data for Training
+
+```{r}
+set.seed(193)
+svm.indices <- createDataPartition(df$car_model, p=.85, list = F)
+```
+
+#### Create some easy variables to access Data
+
+```{r}
+svm.train <- df %>%
+  slice(svm.indices)
+svm.test_in <- df %>%
+  slice(-svm.indices) %>%
+  select(-car_model)
+svm.test_truth <- df %>%
+  slice(-svm.indices) %>%
+  pull(car_model)
+```
+
+#### SVM Classification - Linear kernel
+
+##### Train the SVM
+
+```{r}
+set.seed(193)
+svm.autos_classification_1 <- svm(car_model ~ ., svm.train, kernel = "linear", scale = TRUE, cost = 10)
+```
+
+```{r}
+plot(svm.autos_classification_1, svm.train, price ~ age_in_days)
+```
+
+##### Make Predictions
+
+```{r}
+svm.test_pred_1 <- predict(svm.autos_classification_1 , svm.test_in)
+table(svm.test_pred_1)
+```
+##### Evaluate the Results (confusion matrix)
+```{r}
+confusionMatrix(svm.test_pred_1, svm.test_truth)
+```
+The resulting SVM in the first model reaches a prediction accuracy of slightly under 60%. This is not a better accuracy than in the multiple regression model which we have seen before. In the next model we want to check if we can increase the accuracy with a radial kernel.
+
+#### SVM Classification - Raidal kernel
+
+##### Train the SVM
+
+```{r}
+set.seed(193)
+svm.autos_classification_2 <- svm(car_model ~ ., svm.train, kernel = "radial", scale = TRUE, cost = 100)
+```
+
+```{r}
+plot(svm.autos_classification_2, svm.train, price ~ age_in_days)
+```
+##### Make Predictions
+
+```{r}
+svm.test_pred_2 <- predict(svm.autos_classification_2 , svm.test_in)
+table(svm.test_pred_2)
+```
+##### Evaluate the Results (confusion matrix)
+```{r}
+confusionMatrix(svm.test_pred_2, svm.test_truth)
+```
+
+The resulting SVM of the second model reaches a prediction accuracy of around 70%. This a noticeable better accuracy compared to model 1 (linear kernel) and the multiple regression model, which both reached around 60%. The disadvantage of the second model is the higher complexity due to the raidal kernel.
 
