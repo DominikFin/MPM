@@ -384,7 +384,7 @@ summary(lm.autos_4)
 
 There is strong evidence that age_in_days needs a quadratic term. So we leave that.
 
-We now have our final linear model with explained variability of around 94%. All predictors do have a strong effect on the response variable except for previous owners. All car models have a negative effect on price as the default model was set to Audi A3, which is in general the most expensive of the five models considered. The offer type "Jahreswagen" has a positive effect on price which is logical due to the lower age of the cars. The number of previous owners negatively influence the price of the car which also seems natural, as well as the kilometer and age variable. The fuel type levels Diesel and Elektrobenzin both have a positive effect, as well as PS. Finally, the gear type "Schaltgetriebe" has a negative effect on price compared to the default value "Automatik" which is represented in the intercept parameter. An interpretation of all interaction terms is omitted.
+We now have our final linear model with explained variability of around 94%. All predictors do have a strong effect on the response variable except for previous owners. All car models have a negative effect on price as the default model was set to Audi A6, which is in general the most expensive of the five models considered. The offer type "Jahreswagen" has a positive effect on price which is logical due to the lower age of the cars. The number of previous owners negatively influence the price of the car which also seems natural, as well as the kilometer and age variable. The fuel type levels Diesel and Elektrobenzin both have a positive effect, as well as PS. Finally, the gear type "Schaltgetriebe" has a negative effect on price compared to the default value "Automatik" which is represented in the intercept parameter. An interpretation of all interaction terms is omitted.
 
 ### TODO: Interpreting coefficients
 
@@ -449,7 +449,7 @@ summary(gam.autos_1)
 
 ```
 
-The summary output indicates that there there is strong evidence that age_in_days, kilometer and power_in_ps have a non-linear effect on the response variable. The estimated degrees of freedom quantify the complexity of the smooth functions. Let’s visualize the effects of the variable age_in_days, kilometer and power_in_ps.
+The summary output indicates that there is strong evidence that age_in_days, kilometer and power_in_ps have a non-linear effect on the response variable. The estimated degrees of freedom quantify the complexity of the smooth functions. Let’s visualize the effects of the variable age_in_days, kilometer and power_in_ps.
 
 ```{r plotgam, cache = TRUE}
 
@@ -661,3 +661,6 @@ table(obs = df$car_model,
 ```
 
 Only 60% of all cars were classified correctly (diagonal entries). The classification for the car_model "Audi A6" clearly works best whereas the classification for the car model "Ford Fiesta" is poor.
+
+
+
