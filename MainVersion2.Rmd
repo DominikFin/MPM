@@ -404,14 +404,14 @@ mean(ape.lm.in.sample)
 
 Considering all predictions, our model is on average off by around 3000 Euros. This means that our price prediction deviates on average around 13% from the actual offering price.
 
-As we want a model that does not overfit an generalize well, i.e. one that performs well on new data, we randomly split up our data into a test and training set. Afterwards, apply the linear model on the training data set and test it with the test data set.
+As we want a model that does not overfit and generalize well, i.e. one that performs well on new data, we randomly split up our data into a test and training set. Afterwards, apply the linear model on the training data set and test it with the test data set.
 
 ```{r predlm2, cache = TRUE}
 
 # Create training and test set
 
 set.seed(42)
-indices <- createDataPartition(df$car_model, p=.85, list = F)
+indices <- createDataPartition(df$car_model, p = .85, list = F)
 
 df.train <- df %>%
   slice(indices)
@@ -665,7 +665,7 @@ Only 60% of all cars were classified correctly (diagonal entries). The classific
 
 ## Support Vector Machines
 
-In this part, we want to try the Support Vector Machine (SVM) as a model. First, we want to predict the price using a Support Vector Regression as an alternative to the linear model seen before.Since the main application of SVMs is classification problems, in the second part we also try to predict the model of the car based on the given attributes.
+In this part, we want to try the Support Vector Machine (SVM) as a model. First, we want to predict the price using a Support Vector Regression as an alternative to the linear model seen before. Since the main application of SVMs is classification problems, in the second part we also try to predict the model of the car based on the given attributes.
 
 ### Support Vector Regression
 
@@ -674,21 +674,21 @@ svm.autos_reg <- svm(price~., data=df.train)
 print(svm.autos_reg)
 ```
 
-```{r svm_regression}
+```{r svm_regression_2}
 svm.autos_pred <- predict(svm.autos_reg, df.test)
 x <- 1:length(df.test$price)
 plot(x, df.test$price, pch=18, col="red")
 lines(x, svm.autos_pred, lwd="1", col="blue")
 ```
 
-```{r svm_regression}
+```{r svm_regression_3}
 sqrt(mean((df.test$price - svm.autos_pred)^2))
 ```
 
-Taking all predictions into account, the model deviates from the actual offer price by around 2833 euros on average. This means that our price prediction is slightly better compared to the linear model (2985 Euros).
+Taking all predictions into account, the model deviates from the actual offer price by around 2833 euros on average. This means that our price prediction is slightly better compared to the linear model (2985 euros).
 
 ### Support Vector Machine (Classification Problem)
-To try also the classification possibilities we now try to predict the model based on the given attributes. We will test two models for this classification problem. first a model with a linear kernel and afterwards one with a radial kernel. The accuracy will be compared with that of the previously used multiple regression model, which had the same classification task.
+To try also the classification possibilities we now try to predict the model based on the given attributes. We will test two models for this classification problem. First a model with a linear kernel and afterwards one with a radial kernel. The accuracy will be compared with that of the previously used multiple regression model, which had the same classification task.
 
 #### Prepare the Data for Training
 
