@@ -1,15 +1,16 @@
 ---
 title: "Machine Learning and Predictive Modelling 1"
 author: "Leo Rettich, Lars Neyerlin, Nicolas Ott, Dominik Finzer"
-due date: "12/17/2021"
+date: "07.01.2022"
 output:
-  pdf_document: default
-  html_document: default
+  pdf_document: 
+    toc: true
+    toc_depth: 2
+    number_sections: true
+geometry: margin=0.75in
 urlcolor: blue
 linkcolor: black
 ---
-
-\tableofcontents
 
 \newpage
 
@@ -630,74 +631,52 @@ This optimization is subject to the following constraints:
 | Options as binary variables (0 = no, 1 = yes) | $y >= 0$, $y <= 1$, $z >= 0$, $z <= 1$               |
 | All variables should be integers              |                                                      |
 
-## Implementation examples
-### Example A
+## Implementation
+The previously defined optimization task is implemented in R with the following function:
+```{r optim_function}
+sell.time.optimization <- function(r, v_max){
+  # include client specific parameters
+  var1 <- 60 / r
+  var2 <- 30 + v_max
+
+  # set the coefficients of the objective function
+  objective <- c(1, -45, -75)
+
+  # set the constraints 
+  A <- matrix(c(var1, -0.3, -0.6, 
+                   1,    0,    0,
+                   0,    1,    1,
+                   0,    1,    0,
+                   0,    1,    0,
+                   0,    0,    1,
+                   0,    0,    1), nrow=7, byrow=TRUE) 
+  
+  # set constraint rhs
+  b <- c(var2, 0, 1, 0, 1, 0, 1)
+  
+  # set direction of inequality
+  dir <- c("<=", ">=", "<=", ">=", "<=", ">=", "<=")	
+  
+  # optimize
+  optimum <- lp(direction="max",  objective, A, dir,  b, all.int = TRUE)
+  
+  cat("The optimal solution is (x,y,z) = (", optimum$solution, ")")
+}
+```
+
+### Usage example A
 The following code shows the optimization for a first exemplary user, selling a car with a reference price of 10'000 euros ($r = 10000$). The user is in a hurry and wants to sell his car in 20 days ($v_{max} = 20$).
 ```{r optim_1}
-# set client specific parameters
-r <- 10000
-v_max <- 20
-
-var1 <- 60 / r
-var2 <- 30 + v_max
-
-# set the coefficients of the objective function
-objective <- c(1, -45, -75)
-
-# set the constraints 
-A <- matrix(c(var1, -0.3, -0.6, 
-                 1,    0,    0,
-                 0,    1,    1,
-                 0,    1,    0,
-                 0,    1,    0,
-                 0,    0,    1,
-                 0,    0,    1), nrow=7, byrow=TRUE) 
-
-# set constraint rhs
-b <- c(var2, 0, 1, 0, 1, 0, 1)
-
-# set direction of inequality
-dir <- c("<=", ">=", "<=", ">=", "<=", ">=", "<=")	
-
-# optimize
-optimum <- lp(direction="max",  objective, A, dir,  b, all.int = TRUE)
-
-cat("The optimal solution is (x,y,z) = (", optimum$solution, ")")
+sell.time.optimization(r = 10000, v_max = 20)
 ```
 
 According to the executed optimization, a price of 8'433 instead of 10'000 as well as the use of the "Turbo"-option is recommended to the user in order to speed up the selling of the car. 
 
-### Example B
+### Usage example B
 The following code shows the optimization for another exemplary user, selling a car with a reference price of 2'000 euros ($r = 2000$). The user sees no need to hurry and would still be satisfied by selling his car in 60 days ($v_{max} = 60$). 
 
 ```{r optim_2}
-# set client specific parameters
-r <- 2000
-v_max <- 60
-var1 <- 60 / r
-var2 <- 30 + v_max
-
-# set the coefficients of the objective function
-objective <- c(1, -45, -75)
-
-# set the constraints 
-A <- matrix(c(var1, -0.3, -0.6, 
-                 1,    0,    0,
-                 0,    1,    1,
-                 0,    1,    0,
-                 0,    1,    0,
-                 0,    0,    1,
-                 0,    0,    1), nrow=7, byrow=TRUE) 
-
-# set constraint rhs
-b <- c(var2, 0, 1, 0, 1, 0, 1)
-
-# set direction of inequality
-dir <- c("<=", ">=", "<=", ">=", "<=", ">=", "<=")	
-
-# optimize
-optimum <- lp(direction="max",  objective, A, dir,  b, all.int = TRUE)
-cat("The optimal solution is (x,y,z) = (", optimum$solution, ")")
+sell.time.optimization(r = 2000, v_max = 60)
 ```
 
 According to the executed optimization, a maximized price of 3'000 instead of 2'000 and no use of a premium option at all is recommended.
