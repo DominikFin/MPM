@@ -168,6 +168,7 @@ p2 <- template.scatterplot.df + aes(x = power_in_ps) + ggtitle("price versus pow
 p3 <- template.scatterplot.df + aes(x = kilometer) + ggtitle("price versus kilometer")
 grid.arrange(p1, p2, p3, nrow = 2)
 ```
+
 The relationship between price and age looks linear until an age of around 7000 days. Also the variance is pretty stable until then. Afterwards the variability increases and there might be a positive effect on the price variable. This may be modeled by a quadratic term.
 
 There is clearly a positive effect of power on price. The effect is stronger in the range from 60 PS to around 100. Afterwards there are some bumps. This relationship may require a higher order term. There are not many observations for which the PS are higher than 300.
@@ -190,6 +191,7 @@ p6 <- template.boxplot.df + aes(x = fuel_type) + ggtitle("price among fuel types
 p7 <- template.boxplot.df + aes(x = offer_type) + ggtitle("price among offer types")
 grid.arrange(p4, p5, p6, p7, nrow = 2)
 ```
+
 There are considerable differences among the prices for the different models. The Audi A6 is the most expensive in general whereas the Opel Corsa seems to be lowest in price. On the other hand, the variability for the Opel Corsa seems to be the highest whereas the Seat Leon shows the lowest variability in price.
 
 It seems to be that cars with automatic gear type come with higher prices as well as cars with fuel type Diesel and ElektroBenzin are more expensive than cars with fuel type Benzin. This makes perfectly sense from a business point of view.
@@ -207,6 +209,7 @@ ggplot(data = df,
   geom_smooth() +
   facet_wrap(. ~ car_model)
 ```
+
 We can see that the effect from age on price behaves similarly among the different car models. From a certain age on, the negative effect flattens out. This could be due to very few observations or it could signal a positive effect on price from a certain age on.
 ```{r checkinteractions2, cache = TRUE, message = FALSE}
 
@@ -217,6 +220,7 @@ ggplot(data = df,
   geom_smooth() +
   facet_wrap(. ~ car_model)
 ```
+
 There are mixed effects among the different car models. Each car model seems to have its own effect of the power variable on the price. Therefore, it might be advisable to model ps and car model with an interaction term.^[The power variable seems to be a special one as it could also be interpreted as a categorical variable. One could imagine, that there are not infinite levels of PS within a car model. Furthermore, there seems to be a clearly positive effect when increasing PS at a low level but on the other hand, the effect is very volatile from a certain PS level on.]
 
 ```{r checkinteractions3, cache = TRUE, message=FALSE}
@@ -228,6 +232,7 @@ ggplot(data = df,
   geom_smooth() +
   facet_wrap(. ~ car_model)
 ```
+
 In terms of the direction of the effect all car models show the same linear behavior. But considering the strength of the effect, the Opel Corsa shows a much steeper price depreciation than for example the Skoda Octavia. Therefore, an interaction term makes sense.
 
 # Fitting models
@@ -352,6 +357,7 @@ plot(gam.autos_1, residuals = TRUE, select = 1, col = alpha("black", 0.1), shade
 plot(gam.autos_1, residuals = TRUE, select = 2, col = alpha("black", 0.1), shade = TRUE)
 plot(gam.autos_1, residuals = TRUE, select = 3, col = alpha("black", 0.1), shade = TRUE)
 ```
+
 From a visual perspective, it is hard to interpret the estimated degrees of freedom for the different smooth terms. 
 
 Now we fit the gam model again including the interactions previously defined in the linear model.
@@ -411,6 +417,7 @@ p10 <- ggplot(data = df, mapping = aes(x= age_in_days, y = previous_owners)) +
   geom_smooth()
 grid.arrange(p8, p9, p10, nrow = 2, top = "previous owners")
 ```
+
 In the first plot we can see that 95% of all cars do have either 1 or 2 previous owners. To check the influence of our predictors on the response variable we pick the predictor age_in_days as it seems natural that the age of the car could be somehow connected to the number of previous owners. The second plot indicates that indeed a higher age corresponds to a higher number of previous owners. The variability of age among the different numbers of previous owners is very different and there is no clear pattern visible. This can be due to the fact that there are only very few cars with a number of previous owners above 2. From this point of view, it is questionable that the poisson model will lead to sensible results. The third plot shows again the influence of the age variable on the number of previous owners with interchanged axis. The blue line suggest a positive effect from age on the number of previous owners. The points reflect the number of observations as well as the variability in age among the different levels of previous owners 1 to 8.
 
 We nevertheless try an fit a linear model for our response variable previous owners with the poisson distribution.
@@ -571,7 +578,7 @@ confmatrix.svm_2$overall['Accuracy']
 ```
 The resulting SVM of the second model reaches a prediction accuracy of around 70%. This a noticeable better accuracy compared to model 1 (linear kernel) and the multiple regression model, which both reached around 60%. The disadvantage of the second model is the higher complexity due to the radial kernel.
 
-# Neural Network
+## Neural Network
 In this section we try again to predict the price of a car but this time using a neural network. For this we prepare the dataframe by hot encoding all the categorical variables. Additionaly the cars with the fueltype "Elektrobenzin" are excluded because of the small amount of cars with this feature. 
 ```{r prepare df for NN}
 # filter out fueltype Elektrobenzin
@@ -625,7 +632,8 @@ models <- train(
 )
 plot(models)
 ```
-The above plot shows the resulting RMSE value for the different tried hyperparameters. The best result is obtained with a neural network with two hidden layers with ?? neurons in the first layer and ?? in the second layer. In the next step the neural network is used for prediction on the test set.
+
+The above plot shows the resulting RMSE value for the different tried hyperparameters. The best result is obtained with a neural network with two hidden layers with 11 neurons in the first layer and 6 in the second layer. In the next step the neural network is used for prediction on the test set.
 ```{r model nn predict, out.height= "35%", fig.align='center'}
 # predict price on test data
 predict_nn <- predict(models, newdata = df_nn_test_scaled %>% select(-price))
@@ -639,9 +647,9 @@ plot(predict_nn_unscaled, residuals_nn, abline(0,0), ylab = "residuals",
 ```
 The plot above shows the residuals for the predicted prices of the test set. They fluctuate around the mean of 0 but it appears that the deviation increases with higher car prices. This could indicate that especially for higher priced cars things like optional equipment or the condition of the car have a bigger influence and therefore cause more deviation. This could be an option for a potential improvement of the model.
 ```{r model nn rmse}
-cat(" RMSE trainingset:  ", models$results$RMSE[length(models$results$RMSE)] * 
+cat(" RMSE trainingset:  ", min(models$results$RMSE) * 
       (max(df_nn$price) - min(df_nn$price)) + min(df_nn$price), "\n",
-    "Rsquared:          ", models$results$Rsquared[length(models$results$Rsquared)], "\n",
+    "Rsquared:          ", models$results$Rsquared[which.min(models$results$RMSE)], "\n",
     "RMSE testset:      ", sqrt(mean((df_nn_test$price - predict_nn_unscaled)^2)))
 ```
 The model explains around 91% of the variability in the training data set. The RMSE of the data used for training seems to be higher than the obtained RMSE on the test set with unseen data. This is usually not the case but a possible explanation could be, that the share of higher priced cars with a general higher error was lower in the test set than in the training set. The neural network is therefore off by around 3000 Euros on average and achieves similar results in comparison with the linear model.
