@@ -652,6 +652,7 @@ cat(" RMSE trainingset:  ", models$results$RMSE[length(models$results$RMSE)] *
     "RMSE testset:      ", sqrt(mean((df_nn_test$price - predict_nn_unscaled)^2)))
 ```
 The model explains around 91% of the variability in the training data set. The RMSE of the data used for training seems to be higher than the obtained RMSE on the test set with unseen data. This is usually not the case but a possible explanation could be, that the share of higher priced cars with a general higher error was lower in the test set than in the training set. The neural network is therefore off by around 3000 Euros on average and achieves similar results in comparison with the linear model.
+
 # Optimization
 ## Use Case
 The main topic of this project is to provide a user of the platform with a predicted reference price for the car the user wants to sell. 
