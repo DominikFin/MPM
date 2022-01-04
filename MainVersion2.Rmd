@@ -613,11 +613,11 @@ df_nn_test_scaled <- as.data.frame(scale(select(df_nn_test, -n),
 The cadet framework is used for training the network and hyperparameter optimization. The RMSE was used as the metric to minimze. To make sure that the resulting RMSE is not just resulting by chance due to the random split in training and test set k-Fold cross validation is used. The separate test set is afterwards used to test the model on unseen data.
 ```{r model nn train, cache=TRUE, results='hide'}
 set.seed(123)
-tuGrid <- expand.grid(.layer1=c(8:9), .layer2=c(0), .layer3=c(0))
+tuGrid <- expand.grid(.layer1=c(5:12), .layer2=c(0,6,12), .layer3=c(0))
 trCtrl <- trainControl(
   method = 'repeatedcv',
-  number = 2,
-  repeats = 1,
+  number = 3,
+  repeats = 2,
   returnResamp = 'final', 
   verboseIter = FALSE
   )
