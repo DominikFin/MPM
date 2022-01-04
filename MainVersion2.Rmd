@@ -578,6 +578,80 @@ confusionMatrix(svm.test_pred_2, svm.test_truth)
 ```
 The resulting SVM of the second model reaches a prediction accuracy of around 70%. This a noticeable better accuracy compared to model 1 (linear kernel) and the multiple regression model, which both reached around 60%. The disadvantage of the second model is the higher complexity due to the radial kernel.
 
+# Neural Network
+In this section we try again to predict the price of a car but this time using a neural network. For this we prepare the dataframe by hot encoding all the categorical variables. Additionaly the cars with the fueltype "Elektrobenzin" are excluded because of the small amount of cars with this feature. 
+```{r prepare df for NN}
+# filter out fueltype Elektrobenzin
+df_nn <- df[!(df$fuel_type=="ElektroBenzin"),]
+# Hot encoding of categorical variables
+dmy <- dummyVars("~ .", data = df_nn, fullRank = T)
+df_nn <- data.frame(predict(dmy, newdata = df_nn))
+df_nn <- select(df_nn, -fuel_type.ElektroBenzin)
+```
+
+The data is split in a training set used for training the neural network and a test set for an unbiased evaluation of the final model with unseen data during the training phase. Furthermore the numeric data is scaled with a simple min max scaling procedure. This is done for a potentially faster learning and faster convergence during training and because of the difference in magnitude between the numeric values.
+```{r scale and split in training and test , results='hide', message=FALSE}
+# split in training and test set with equal distribution of car models
+set.seed(123)
+df_nn <- df_nn %>%
+  mutate(n= row_number()) %>%
+  select(n, everything())
+df_nn_train <- df_nn %>%
+  group_by(car_model.Ford.Fiesta, car_model.Opel.Corsa, 
+           car_model.Seat.Leon, car_model.Skoda.Octavia) %>%
+  sample_frac(.8)
+df_nn_test <- anti_join(df_nn, df_nn_train)
+# max and min value for scaling
+max <- apply(select(df_nn, -n), 2, max)
+min <- apply(select(df_nn, -n), 2, min)
+# scale both the training and the test set
+df_nn_train_scaled <-as.data.frame(scale(select(df_nn_train, -n), 
+                                         center = min, scale = max - min))
+df_nn_test_scaled <- as.data.frame(scale(select(df_nn_test, -n), 
+                                         center = min, scale = max - min))
+```
+The cadet framework is used for training the network and hyperparameter optimization. The RMSE was used as the metric to minimze. To make sure that the resulting RMSE is not just resulting by chance due to the random split in training and test set k-Fold cross validation is used. The separate test set is afterwards used to test the model on unseen data.
+```{r model nn train, cache=TRUE, results='hide'}
+set.seed(123)
+tuGrid <- expand.grid(.layer1=c(8:9), .layer2=c(0), .layer3=c(0))
+trCtrl <- trainControl(
+  method = 'repeatedcv',
+  number = 2,
+  repeats = 1,
+  returnResamp = 'final', 
+  verboseIter = FALSE
+  )
+models <- train(
+  x = df_nn_train_scaled %>% select(-price),
+  y = df_nn_train_scaled %>% pull(price),
+  method = 'neuralnet', metric = 'RMSE',
+  linear.output = TRUE,
+  tuneGrid = tuGrid,
+  trControl = trCtrl,
+ threshold = 0.05
+)
+plot(models)
+```
+The above plot shows the resulting RMSE value for the different tried hyperparameters. The best result is obtained with a neural network with two hidden layers with ?? neurons in the first layer and ?? in the second layer. In the next step the neural network is used for prediction on the test set.
+```{r model nn predict, out.height= "35%", fig.align='center'}
+# predict price on test data
+predict_nn <- predict(models, newdata = df_nn_test_scaled %>% select(-price))
+# undo scaling for predicted prices
+predict_nn_unscaled <- predict_nn * (max(df_nn$price) - min(df_nn$price)) + min(df_nn$price)
+# calculate residuals 
+residuals_nn <- df_nn_test$price - predict_nn_unscaled
+# plot residuals and predicted values
+plot(predict_nn_unscaled, residuals_nn, abline(0,0), ylab = "residuals", 
+     xlab = "predicted prices for test set")
+```
+The plot above shows the residuals for the predicted prices of the test set. They fluctuate around the mean of 0 but it appears that the deviation increases with higher car prices. This could indicate that especially for higher priced cars things like optional equipment or the condition of the car have a bigger influence and therefore cause more deviation. This could be an option for a potential improvement of the model.
+```{r model nn rmse}
+cat(" RMSE trainingset:  ", models$results$RMSE[length(models$results$RMSE)] * 
+      (max(df_nn$price) - min(df_nn$price)) + min(df_nn$price), "\n",
+    "Rsquared:          ", models$results$Rsquared[length(models$results$Rsquared)], "\n",
+    "RMSE testset:      ", sqrt(mean((df_nn_test$price - predict_nn_unscaled)^2)))
+```
+The model explains around 91% of the variability in the training data set. The RMSE of the data used for training seems to be higher than the obtained RMSE on the test set with unseen data. This is usually not the case but a possible explanation could be, that the share of higher priced cars with a general higher error was lower in the test set than in the training set. The neural network is therefore off by around 3000 Euros on average and achieves similar results in comparison with the linear model.
 # Optimization
 ## Use Case
 The main topic of this project is to provide a user of the platform with a predicted reference price for the car the user wants to sell. 
@@ -686,7 +760,7 @@ In the eyes of the project team, the feasibility study that was conducted result
 
 A classification procedure offers the possibility to determine which categorical variables should be included in the model. It has been found that classical classification methods such as SVM are suitable for making meaningful, if not always correct, classifications.
 
-For the final model deployment, the project team would choose a linear model. First, the linear model is easier to interpret and second, the non-parametric models showed only slightly more accuracy. It also makes sense from a computational perspective, as the model must predict a price within seconds to ensure customer satisfaction.
+For the final model deployment, the project team would choose a linear model. First, the linear model is easier to interpret and second, the non-parametric models showed only slightly more accuracy but comes with more training expense. 
 
 However, the linear model has some limitations. The feasibility study above focused on models that had a large enough sample size. In particular, when there are interaction terms and factor variables with many levels, one must ensure that there are enough observations for all individual levels of the factor variables.
 
