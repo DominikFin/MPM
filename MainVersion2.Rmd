@@ -3,10 +3,14 @@ title: "Machine Learning and Predictive Modelling 1"
 author: "Leo Rettich, Lars Neyerlin, Nicolas Ott, Dominik Finzer"
 date: "07.01.2022"
 output:
-  pdf_document: 
-    toc: true
+  pdf_document:
+    toc: yes
     toc_depth: 2
-    number_sections: true
+    number_sections: yes
+  html_document:
+    toc: yes
+    toc_depth: '2'
+    df_print: paged
 geometry: margin=0.75in
 urlcolor: blue
 linkcolor: black
@@ -33,6 +37,7 @@ packages <- c("gitcreds",
               "gridExtra",
               "reshape2",
               "nnet",
+              "neuralnet",
               "lpSolve")
 installed_packages <- packages %in% rownames(installed.packages())
 if (any(installed_packages == FALSE)) {
@@ -55,6 +60,7 @@ library(lubridate)
 library(gridExtra)
 library(reshape2)
 library(nnet)
+library(neuralnet)
 library(lpSolve)
 ```
 
@@ -501,13 +507,13 @@ In this part, we want to try the Support Vector Machine (SVM) as a model. First,
 ### Support Vector Regression
 ```{r svm_regression,  cache = TRUE}
 svm.autos_reg <- svm(price~., data=df.train)
-print(svm.autos_reg)
+#print(svm.autos_reg)
 ```
 
 ```{r svm_regression_2, cache=TRUE}
 svm.autos_pred <- predict(svm.autos_reg, df.test)
 x <- 1:length(df.test$price)
-plot(x, df.test$price, pch=18, col="red")
+plot(x, df.test$price, pch=18, col="red", ylab = "Price")
 lines(x, svm.autos_pred, lwd="1", col="blue")
 ```
 
@@ -519,62 +525,49 @@ Taking all predictions into account, the model deviates from the actual offer pr
 ### Support Vector Machine (Classification Problem)
 To try also the classification possibilities we now try to predict the model based on the given attributes. We will test two models for this classification problem. First a model with a linear kernel and afterwards one with a radial kernel. The accuracy will be compared with that of the previously used multiple regression model, which had the same classification task.
 
-#### Prepare the Data for Training
+#### Prepare the data for training
 ```{r}
-set.seed(193)
-svm.indices <- createDataPartition(df$car_model, p=.85, list = F)
-```
-
-#### Create some easy variables to access Data
-```{r}
-svm.train <- df %>%
-  slice(svm.indices)
-svm.test_in <- df %>%
-  slice(-svm.indices) %>%
-  select(-car_model)
-svm.test_truth <- df %>%
-  slice(-svm.indices) %>%
-  pull(car_model)
+svm.train <- df %>% slice(indices)
+svm.test_in <- df %>% slice(-indices) %>% select(-car_model)
+svm.test_truth <- df %>% slice(-indices) %>% pull(car_model)
 ```
 
 #### SVM Classification - Linear kernel
 ##### Train the SVM
 ```{r, cache = TRUE}
-set.seed(193)
 svm.autos_classification_1 <- svm(car_model ~ ., svm.train, kernel = "linear", scale = TRUE, cost = 10)
-```
-```{r}
-plot(svm.autos_classification_1, svm.train, price ~ age_in_days)
+#plot(svm.autos_classification_1, svm.train, price ~ age_in_days)
 ```
 
-##### Make Predictions
+##### Make predictions
 ```{r}
 svm.test_pred_1 <- predict(svm.autos_classification_1 , svm.test_in)
 table(svm.test_pred_1)
 ```
-##### Evaluate the Results (confusion matrix)
+##### Evaluate the results (confusion matrix)
 ```{r}
-confusionMatrix(svm.test_pred_1, svm.test_truth)
+confmatrix.svm_1<-confusionMatrix(svm.test_pred_1, svm.test_truth)
+confmatrix.svm_1$table
+confmatrix.svm_1$overall['Accuracy']
 ```
 The resulting SVM in the first model reaches a prediction accuracy of slightly under 60%. This is not a better accuracy than in the multiple regression model which we have seen before. In the next model we want to check if we can increase the accuracy with a radial kernel.
 
 #### SVM Classification - Radial kernel
 ##### Train the SVM
 ```{r, cache=TRUE}
-set.seed(193)
 svm.autos_classification_2 <- svm(car_model ~ ., svm.train, kernel = "radial", scale = TRUE, cost = 100)
+#plot(svm.autos_classification_2, svm.train, price ~ age_in_days)
 ```
-```{r}
-plot(svm.autos_classification_2, svm.train, price ~ age_in_days)
-```
-##### Make Predictions
+##### Make predictions
 ```{r}
 svm.test_pred_2 <- predict(svm.autos_classification_2 , svm.test_in)
 table(svm.test_pred_2)
 ```
-##### Evaluate the Results (confusion matrix)
+##### Evaluate the results (confusion matrix)
 ```{r}
-confusionMatrix(svm.test_pred_2, svm.test_truth)
+confmatrix.svm_2<-confusionMatrix(svm.test_pred_2, svm.test_truth)
+confmatrix.svm_2$table
+confmatrix.svm_2$overall['Accuracy']
 ```
 The resulting SVM of the second model reaches a prediction accuracy of around 70%. This a noticeable better accuracy compared to model 1 (linear kernel) and the multiple regression model, which both reached around 60%. The disadvantage of the second model is the higher complexity due to the radial kernel.
 
