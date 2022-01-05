@@ -129,9 +129,9 @@ ecdf(df$age_in_days)(1460)
 ecdf(df$power_in_ps)(200)
 ecdf(df$kilometer)(100000)
 ```
-The response variable price shows a right-skewed distribution. Furthermore, the price can be considered as "amount" Therefore it will be log-transformed in the modelling part. Prices range from 390 to 77'950 Euros. 93% of all observations show a price which is 30'000 or less.
+The response variable price shows a right-skewed distribution. Furthermore, the price can be considered as "amount" Therefore it will be log-transformed in the modelling part. Age, power and kilometer could also be considered as right-skewed. By log-transforming these variables the predictions got worse in the modelling part. As the main goal of this feasibility study is to come up with accurate predictions it was omitted to log-transform the predictors.
 
-All the other predictors show also some kind of right-skewedness. Half of the cars offered are younger than four years (1460 / 365 ~ 4 years). Only 10% off all cars do have more than 200 PS and only 25 % of all cars do have a mileage which is above 100'000 kilometers.
+Prices range from 390 to 77'950 Euros. 93% of all observations show a price which is 30'000 or less. Half of the cars offered are younger than four years (1460 / 365 ~ 4 years). Only 10% off all cars do have more than 200 PS and only 25 % of all cars do have a mileage which is above 100'000 kilometers.
 ```{r generalanalyis2}
 
 # Distribution of categorical predictors
@@ -198,7 +198,7 @@ It seems to be that cars with automatic gear type come with higher prices as wel
 
 Overall, Jahreswagen have generally a slightly higher price than Gebrauchtwagen.
 
-## Checking for different effects among the models
+## Checking for different effects among the car models
 It is interesting to see whether or not the effects of different predictors differ among the car models or to put it differently, if there is any interaction of certain predictors among the different car models. In this case, the variable car model serves as control variable. To test these kind of interactions the following plots are used.
 ```{r checkinteractions, cache = TRUE, message = FALSE}
 
@@ -236,7 +236,7 @@ ggplot(data = df,
 In terms of the direction of the effect all car models show the same linear behavior. But considering the strength of the effect, the Opel Corsa shows a much steeper price depreciation than for example the Skoda Octavia. Therefore, an interaction term makes sense.
 
 # Fitting models
-## Fitting a linear model
+## Linear Model
 We start by including all predictors without any interactions:
 ```{r lm, cache = TRUE}
 
@@ -338,7 +338,7 @@ mean(ape.lm.out.sample)
 ```
 There are no major deviations from the in-sample testing. That means the linear model generalizes well.
 
-## Fitting a gam model
+## GAM model
 In our data set we do have age_in_days, kilometer and power_in_ps, three continuous variables with a possible non-linear effect on the response variable. We allow them to have a non-linear effect by specifying the smooth terms s(age_in_days), s(kilometer) and s(power_in_ps) fitting a gam model. As a basis we use our linear model from above without any interactions.
 ```{r gam1, results = "hide", cache = TRUE}
 
@@ -394,7 +394,7 @@ mean(ape.gam.out.sample)
 ```
 Compared to the linear model, the gam model does not really improve the predictions although it is more complex. There are no major deviations from the in-sample testing, so again the model generalizes well.
 
-## Fitting a generalised linear Model with family set to Poisson
+## Generalised Linear Model with family set to Poisson
 Is it possible to infer the number of previous owners given the other variables in the data set such as age and price? Let's try that out with a linear model where we change the underlying distribution to "Poisson". For this model we change the response variable from price to previous owners. To find out about the distribution of the variable previous owners we draw a histogram. To see whether there are major price deviations among the different levels of previous owners we draw a boxplot.
 ```{r prevowners, cache=TRUE, message = FALSE}
 
@@ -470,7 +470,7 @@ mean(ape.glm2.out.sample)
 ```
 As expected, the accuracy of this model is quite bad. Considering all predictions, our model is on average off by around half a previous owner. This means, that our prediction deviates on average around 30% from the actual number of previous owners for a given car.
 
-## Fitting a generalised linear Model with family set to binomial
+## Generalised Linear Model with family set to binomial
 We are interested if we could predict whether an advertised car comes with gear type "Automatik" or not given the other variables in the data set. In order to answer this question we need to add a special column to our data set, containing a one whenever the car has automatic gear type and containing a zero otherwise.
 ```{r glmbinomial}
 
